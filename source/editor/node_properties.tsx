@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Box, RepeatDirection, SizePolicy } from '../layout';
-import { POLICY_COLOR, POLICY_EDGE, REPEAT_DIRECTION } from './palette';
+import { POLICY_COLOR } from './palette';
 import { directionsFor, REPEAT_GLYPH, repeats, setHeightPolicy,
   setWidthPolicy } from './repeat';
 
@@ -95,7 +95,7 @@ export class NodeProperties extends React.Component<Properties> {
     const style = (() => {
       if(direction === chosen) {
         return {...NodeProperties.STYLE.arrow, ...NodeProperties.STYLE.chosen,
-          borderColor: REPEAT_DIRECTION};
+          border: '2px solid #684BC7'};
       }
       return NodeProperties.STYLE.arrow;
     })();
@@ -112,7 +112,7 @@ export class NodeProperties extends React.Component<Properties> {
       if(value === policy) {
         return {...NodeProperties.STYLE.choice,
           ...NodeProperties.STYLE.chosen,
-          borderColor: POLICY_EDGE[value]};
+          border: '2px solid #684BC7'};
       }
       return NodeProperties.STYLE.choice;
     })();
