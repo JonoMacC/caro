@@ -181,7 +181,7 @@ async function main(){
   check('and stops before it swallows the board',
     await panelWidth(), 520);
 
-  // A selected box is ringed clear of whatever it is painted.
+  // A selected box is ringed just inside its own edge
   await clickRow('Main');
   await pause(300);
   await clickNoted('10x10');
@@ -193,13 +193,16 @@ async function main(){
           c.style.boxShadow.indexOf('inset') !== -1);
     const s = getComputedStyle(box);
     return {colour: s.outlineColor, width: s.outlineWidth,
-      rule: s.boxShadow.indexOf('rgb(255, 255, 255)') !== -1};
+      offset: s.outlineOffset, rule: s.boxShadow.indexOf(
+        'rgb(255, 255, 255)') !== -1};
   })()`);
   check('a selected box is ringed in the selection colour', ring.colour,
     'rgb(104, 75, 199)');
-  check('thicker than the policy edge it sits inside', ring.width, '3px');
-  check('with a rule of white between the ring and the fill', ring.rule,
-    true);
+  check('a single pixel thick', ring.width, '1px');
+  check('sitting just inside the box rather than growing past its edge',
+    ring.offset, '-1px');
+  check('with a line of white between the ring and the policy edge',
+    ring.rule, true);
 
   // The arrow keys walk the tree the way they walk one anywhere else.
   const press = async key => {
