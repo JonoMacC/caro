@@ -16,6 +16,7 @@ interface State {
   board: Board;
   component: Component;
   selection: Box[];
+  hovered: Box;
   active: Box[];
   reveal: Reveal;
   zoom: number;
@@ -34,6 +35,7 @@ export class Application extends React.Component<{}, State> {
       board,
       component,
       selection: [],
+      hovered: null,
       active: null,
       reveal: null,
       zoom: 1,
@@ -57,9 +59,10 @@ export class Application extends React.Component<{}, State> {
         {this.state.component !== null &&
           <OutlinePanel sections={this.state.board.components}
             component={this.state.component} active={this.state.active}
-            selection={this.state.selection} problems={problems}
+            selection={this.state.selection} hovered={this.state.hovered}
+            problems={problems}
             onSection={this.onSelectSection} onActivate={this.onActivate}
-            onReveal={this.onReveal}/>}
+            onReveal={this.onReveal} onHover={this.onHover}/>}
         <div style={Application.STYLE.content}>
           {this.renderToolbar()}
           {this.renderBody()}
@@ -298,8 +301,10 @@ export class Application extends React.Component<{}, State> {
     if(this.state.component !== null) {
       return (
         <ScenarioBoard component={this.state.component}
-          selection={this.state.selection} active={this.state.active}
+          selection={this.state.selection} hovered={this.state.hovered}
+          active={this.state.active}
           reveal={this.state.reveal} onSelect={this.onSelect}
+          onHover={this.onHover}
           onChange={this.onChange} onCommit={this.onCommit}
           onRemoveScenario={this.onRemoveScenario}
           onCopyScenario={this.onCopyScenario}
@@ -595,6 +600,12 @@ export class Application extends React.Component<{}, State> {
     }
     this.note({selection, active: holder});
     this.setState({selection, active: holder});
+  }
+
+  /** Marks the box the cursor rests on, kept apart from undo history since
+      it is not a change to the specification. */
+  private onHover = (box: Box) => {
+    this.setState({hovered: box});
   }
 
   /** Redraws what a gesture is doing, which is not a change to remember

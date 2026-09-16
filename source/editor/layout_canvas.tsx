@@ -29,6 +29,11 @@ const RING = 1;
     hard to tell apart from a policy edge of a similar shade. */
 const HALO = 1;
 
+/** How thick the ring around a hovered box is painted, in pixels of
+    screen, held to that regardless of the canvas's zoom. Thicker than the
+    selected ring so the two read as different states. */
+const HOVER_RING = 2;
+
 /** How close to an edge the cursor must be to resize a box, in pixels of
     screen. */
 const RESIZE_MARGIN = 8;
@@ -121,6 +126,9 @@ interface Properties {
   /** The boxes currently selected, empty when none are. */
   selection: Box[];
 
+  /** The box the cursor rests on, null when none does. */
+  hovered: Box;
+
   /** Whether this is the canvas being worked in, the one a paste goes
       into. */
   active: boolean;
@@ -131,6 +139,10 @@ interface Properties {
   /** Called when the selection changes, adding to it rather than replacing
       it when asked, and naming the boxes of the canvas it changed in. */
   onSelect?: (boxes: Box[], extend: boolean, holder: Box[]) => void;
+
+  /** Called when the cursor rests on a box or leaves it, naming null in
+      the latter case. */
+  onHover?: (box: Box) => void;
 
   /** Called whenever the layout has been modified. */
   onChange?: () => void;
@@ -267,9 +279,13 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   private renderBox = (box: Box) => {
     const label = LayoutCanvas.labelOf(box);
     const marked = this.props.selection.indexOf(box) !== -1;
+    const hovered = !marked && this.props.hovered === box;
     const selection = (() => {
       if(marked) {
         return this.selectedStyle();
+      }
+      if(hovered) {
+        return this.hoverStyle();
       }
       return {};
     })();
@@ -281,11 +297,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     })();
     return (
       <div key={this.keyOf(box)} data-keeps-selection=''
+          data-selected={marked ? '' : undefined}
+          data-hovered={hovered ? '' : undefined}
           ref={element => this.elements.set(box, element)}
+          onMouseEnter={() => this.props.onHover?.(box)}
+          onMouseLeave={() => this.props.onHover?.(null)}
           style={{...LayoutCanvas.STYLE.box,
             left: `${box.x}px`, top: `${box.y}px`,
             width: `${box.width}px`, height: `${box.height}px`,
-            ...this.paintFor(box, marked), ...selection,
+            ...this.paintFor(box, marked, hovered), ...selection,
             ...alignment, ...LayoutCanvas.cursorFor(this.state.handle)}}>
         {label !== '' &&
           <span style={{...LayoutCanvas.STYLE.label,
@@ -370,6 +390,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   /** Returns the outline marking a selected box. */
   private selectedStyle() {
     const ring = this.local(RING);
+    return {
+      outline: `${ring}px solid #684BC7`,
+      outlineOffset: `-${ring}px`
+    };
+  }
+
+  /** Returns the outline marking a hovered box. */
+  private hoverStyle() {
+    const ring = this.local(HOVER_RING);
     return {
       outline: `${ring}px solid #684BC7`,
       outlineOffset: `-${ring}px`
@@ -824,10 +853,10 @@ export class LayoutCanvas extends React.Component<Properties, State> {
 
   /** Returns the painting a box carries: a policy colour along each edge,
       the strong purple along the edge a repeat runs from, a fill where
-      both policies agree, and, on a selected box, a line of a neutral
-      colour laid between its ring and the policy colour so the two are
-      never read as one border. */
-  private paintFor(box: Box, marked: boolean) {
+      both policies agree, and, on a selected or hovered box, a line of a
+      neutral colour laid between its ring and the policy colour so the
+      two are never read as one border. */
+  private paintFor(box: Box, marked: boolean, hovered: boolean) {
     const same = box.widthPolicy === box.heightPolicy;
     const across = LayoutCanvas.edgeFor(box.widthPolicy, same);
     const down = LayoutCanvas.edgeFor(box.heightPolicy, same);
@@ -840,11 +869,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       `inset 0 ${EDGE}px 0 0 ${edges.top}, ` +
       `inset 0 -${EDGE}px 0 0 ${edges.bottom}`;
     const painted = (() => {
-      if(!marked) {
-        return boxShadow;
+      if(marked) {
+        const rim = this.local(RING) + this.local(HALO);
+        return `inset 0 0 0 ${rim}px #FFFFFF, ${boxShadow}`;
       }
-      const rim = this.local(RING) + this.local(HALO);
-      return `inset 0 0 0 ${rim}px #FFFFFF, ${boxShadow}`;
+      if(hovered) {
+        const rim = this.local(HOVER_RING) + this.local(HALO);
+        return `inset 0 0 0 ${rim}px #FFFFFF, ${boxShadow}`;
+      }
+      return boxShadow;
     })();
     if(!same) {
       return {boxShadow: painted};

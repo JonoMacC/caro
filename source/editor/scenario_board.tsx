@@ -18,6 +18,9 @@ interface Properties {
   /** The boxes currently selected, empty when none are. */
   selection: Box[];
 
+  /** The box the cursor rests on, null when none does. */
+  hovered: Box;
+
   /** The boxes of the canvas being worked in, null when none has been. */
   active: Box[];
 
@@ -33,6 +36,10 @@ interface Properties {
   /** Called when the selection changes, adding to it rather than replacing
       it when asked, and naming the boxes of the canvas it changed in. */
   onSelect?: (boxes: Box[], extend: boolean, holder: Box[]) => void;
+
+  /** Called when the cursor rests on a box or leaves it, naming null in
+      the latter case. */
+  onHover?: (box: Box) => void;
 
   /** Called whenever a scenario's layout has been modified. */
   onChange?: () => void;
@@ -144,10 +151,12 @@ export class ScenarioBoard extends React.Component<Properties> {
           {this.renderControls(layout, index)}
         </div>
         <LayoutCanvas boxes={layout.boxes}
-          selection={this.props.selection} zoom={this.props.zoom}
+          selection={this.props.selection} hovered={this.props.hovered}
+          zoom={this.props.zoom}
           active={layout.boxes === this.props.active}
           reveal={this.props.reveal}
-          onSelect={this.props.onSelect} onChange={this.props.onChange}
+          onSelect={this.props.onSelect} onHover={this.props.onHover}
+          onChange={this.props.onChange}
           onCommit={this.props.onCommit}
           onRemove={this.props.onRemoveBox}/>
         {layout.overlays.map((overlay, layer) =>
@@ -169,9 +178,11 @@ export class ScenarioBoard extends React.Component<Properties> {
           </button>
         </div>
         <LayoutCanvas boxes={overlay} selection={this.props.selection}
+          hovered={this.props.hovered}
           zoom={this.props.zoom} active={overlay === this.props.active}
           reveal={this.props.reveal}
-          onSelect={this.props.onSelect} onChange={this.props.onChange}
+          onSelect={this.props.onSelect} onHover={this.props.onHover}
+          onChange={this.props.onChange}
           onCommit={this.props.onCommit}
           onRemove={this.props.onRemoveBox}/>
       </div>);

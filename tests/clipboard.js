@@ -52,7 +52,7 @@ async function main(){
       .filter(c => c.style.boxShadow.indexOf('inset') !== -1)
       .map(b => parseInt(b.style.left) + ',' + parseInt(b.style.top) + ' ' +
         parseInt(b.style.width) + 'x' + parseInt(b.style.height) +
-        (b.style.outline === '' ? '' : ' SEL'));
+        (b.hasAttribute('data-selected') ? ' SEL' : ''));
   })()`);
   const show = async (index, label) => {
     const now = (await lay(index)).join(' | ');
