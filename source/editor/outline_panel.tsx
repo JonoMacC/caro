@@ -16,6 +16,22 @@ const WIDTH = 210;
 const NARROWEST = 120;
 const WIDEST = 520;
 
+/** The distance a press must cover before it drags a row to reorder it,
+    rather than choosing it, in pixels. */
+const DRAG_THRESHOLD = 4;
+
+/** How tall the line marking where a dragged row would land is drawn. */
+const INDICATOR_HEIGHT = 8;
+
+/** How far the line marking where a dragged row would land is held clear of
+    the panel's own edge. */
+const INDICATOR_INSET = 8;
+
+interface Point {
+  x: number;
+  y: number;
+}
+
 /** A row of the tree as it stands, one of the sections, scenarios, layers
     and boxes on show once the folded ones are left out. */
 interface Entry {
@@ -49,6 +65,9 @@ interface Entry {
 
   /** Whether the row is open. */
   open: boolean;
+
+  /** Whether the row can be dragged to reorder it among its siblings. */
+  draggable: boolean;
 
   /** How the row is marked out from the rest. */
   style: object;
@@ -87,12 +106,27 @@ interface Properties {
 
   /** Called to select a box and bring it into view. */
   onReveal?: (component: Component, box: Box) => void;
+
+  /** Called to move a section to a new position among its siblings. */
+  onMoveSection?: (component: Component, offset: number) => void;
+
+  /** Called to move a scenario to a new position within its section. */
+  onMoveScenario?: (layout: Layout, offset: number) => void;
+}
+
+/** Where the line marking a drop sits: how far down the tree, and how deep,
+    so it can be indented like the row it would land among. */
+interface DropLine {
+  top: number;
+  depth: number;
 }
 
 interface State {
   open: Set<object>;
   width: number;
   focus: number;
+  dragging: object;
+  dropLine: DropLine;
 }
 
 /** Lists a whole specification as a tree of sections, scenarios, layers and
@@ -101,12 +135,19 @@ interface State {
 export class OutlinePanel extends React.Component<Properties, State> {
   constructor(props: Properties) {
     super(props);
-    this.state = {open: new Set<object>(), width: WIDTH, focus: -1};
+    this.state = {open: new Set<object>(), width: WIDTH, focus: -1,
+      dragging: null, dropLine: null};
     this.grabbed = 0;
     this.held = 0;
     this.rows = [];
     this.settled = -1;
     this.walked = false;
+    this.identifiers = new WeakMap<object, string>();
+    this.count = 0;
+    this.dragOrigin = null;
+    this.dragActive = false;
+    this.dragEntry = null;
+    this.dropTarget = null;
   }
 
   public render(): JSX.Element {
@@ -118,6 +159,15 @@ export class OutlinePanel extends React.Component<Properties, State> {
           data-outline='' onKeyDown={this.onKeyDown}>
         <div style={OutlinePanel.STYLE.tree}>
           {entries.map(this.renderRow)}
+          {this.state.dropLine !== null &&
+            <div data-drop-indicator=''
+                style={{...OutlinePanel.STYLE.indicator,
+                  top: `${this.state.dropLine.top}px`,
+                  left: `${this.state.dropLine.depth * INDENT +
+                    INDICATOR_INSET}px`}}>
+              <span style={OutlinePanel.STYLE.indicatorDot}/>
+              <span style={OutlinePanel.STYLE.indicatorLine}/>
+            </div>}
         </div>
         <div style={OutlinePanel.STYLE.grip} data-grip=''
           title='Drag to widen' onMouseDown={this.onGrab}/>
@@ -146,6 +196,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
 
   public componentWillUnmount(): void {
     this.release();
+    this.endDrag();
   }
 
   private grabbed: number;
@@ -153,6 +204,12 @@ export class OutlinePanel extends React.Component<Properties, State> {
   private rows: HTMLButtonElement[];
   private settled: number;
   private walked: boolean;
+  private identifiers: WeakMap<object, string>;
+  private count: number;
+  private dragOrigin: Point;
+  private dragActive: boolean;
+  private dragEntry: Entry;
+  private dropTarget: number;
 
   /** Returns the rows on show, folded ones left out, in the order they are
       read down the panel. This is what the arrow keys walk. */
@@ -172,6 +229,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
         note: `${scenarios.length}`,
         leaf: scenarios.length === 0,
         open,
+        draggable: true,
         style: {...this.amissStyle(this.sectionFaults(component)),
           ...this.editingStyle(component)},
         visit: () => this.props.onSection?.(component),
@@ -206,6 +264,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       note: `${layout.boxes.length}`,
       leaf: layout.boxes.length === 0 && layout.overlays.length === 0,
       open,
+      draggable: index !== 0,
       style: {...this.amissStyle(
           this.frameFaults(component, layout.boxes)),
         ...this.markFor(layout.boxes)},
@@ -237,6 +296,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
         note: `${overlay.length}`,
         leaf: overlay.length === 0,
         open: shown,
+        draggable: false,
         style: {...this.amissStyle(this.frameFaults(component, overlay)),
           ...this.markFor(overlay)},
         visit: () => this.props.onActivate?.(component, overlay),
@@ -270,6 +330,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       note: OutlinePanel.sizeOf(box, chosen),
       leaf: true,
       open: false,
+      draggable: false,
       style: {...this.amissStyle(this.boxFaults(component, box)),
         ...(() => {
           if(!chosen) {
@@ -298,10 +359,17 @@ export class OutlinePanel extends React.Component<Properties, State> {
       }
       return -1;
     })();
+    const drag = entry.draggable && entry.depth <= 1;
     return (
-      <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style,
-          paddingLeft: `${entry.depth * INDENT}px`}}>
+      <div key={this.keyOf(entry.node)} data-index={index}
+          style={{...OutlinePanel.STYLE.row, ...entry.style,
+            ...(this.state.dragging === entry.node ?
+              OutlinePanel.STYLE.dragging : {}),
+            paddingLeft: `${entry.depth * INDENT}px`}}
+          onMouseDown={drag ?
+            (event => this.onRowMouseDown(event, entry)) : undefined}>
         <button style={OutlinePanel.STYLE.twist} tabIndex={-1}
+            onMouseDown={event => event.stopPropagation()}
             onClick={() => this.toggle(entry.node)} title='Fold'>
           {twist}
         </button>
@@ -414,6 +482,159 @@ export class OutlinePanel extends React.Component<Properties, State> {
   private release = () => {
     window.removeEventListener('mousemove', this.onDrag);
     window.removeEventListener('mouseup', this.release);
+  }
+
+  /** Returns a stable identifier for a node, made up the first time it is
+      asked for and kept for as long as the node exists, so that a row keeps
+      its own identity in React's eyes across a reorder rather than being
+      reused for whatever node now sits at its old position. */
+  private keyOf(node: object): string {
+    let id = this.identifiers.get(node);
+    if(id === undefined) {
+      id = `row${this.count}`;
+      this.count += 1;
+      this.identifiers.set(node, id);
+    }
+    return id;
+  }
+
+  /** Returns the array a row's node is one of, which is what a reorder
+      splices into. */
+  private siblingsOf(entry: Entry): object[] {
+    if(entry.depth === 0) {
+      return this.props.sections;
+    }
+    return entry.component.layouts;
+  }
+
+  private onRowMouseDown = (event: React.MouseEvent, entry: Entry) => {
+    this.dragOrigin = {x: event.clientX, y: event.clientY};
+    this.dragActive = false;
+    this.dragEntry = entry;
+    window.addEventListener('mousemove', this.onRowMouseMove);
+    window.addEventListener('mouseup', this.onRowMouseUp);
+    window.addEventListener('keydown', this.onDragKeyDown);
+  }
+
+  private onRowMouseMove = (event: MouseEvent) => {
+    if(!this.dragActive) {
+      const dx = event.clientX - this.dragOrigin.x;
+      const dy = event.clientY - this.dragOrigin.y;
+      if(Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+        return;
+      }
+      this.dragActive = true;
+      this.setState({dragging: this.dragEntry.node});
+    }
+    this.updateDrop(event.clientX, event.clientY);
+  }
+
+  private onRowMouseUp = () => {
+    if(this.dragActive && this.dropTarget !== null) {
+      this.commitDrop();
+    }
+    this.endDrag();
+  }
+
+  private onDragKeyDown = (event: KeyboardEvent) => {
+    if(event.key !== 'Escape') {
+      return;
+    }
+    this.endDrag();
+  }
+
+  /** Figures out where a row being dragged would land, and how that should
+      be shown, from the point under the cursor. Clears the drop when the
+      point is not a valid place for this row to go. */
+  private updateDrop(x: number, y: number): void {
+    const entries = this.entries();
+    const hit = (document.elementFromPoint(x, y) as Element)?.
+      closest('[data-index]') as HTMLElement;
+    if(hit === null || hit === undefined) {
+      this.clearDrop();
+      return;
+    }
+    const at = Number(hit.dataset.index);
+    const candidate = entries[at];
+    if(candidate === undefined || candidate.depth !== this.dragEntry.depth) {
+      this.clearDrop();
+      return;
+    }
+    if(this.dragEntry.depth === 1 &&
+        candidate.component !== this.dragEntry.component) {
+      this.clearDrop();
+      return;
+    }
+    const rect = hit.getBoundingClientRect();
+    const after = y > rect.top + rect.height / 2;
+    const list = this.siblingsOf(this.dragEntry);
+    const current = list.indexOf(this.dragEntry.node);
+    const candidateIndex = list.indexOf(candidate.node);
+    const arrayIndex = after ? candidateIndex + 1 : candidateIndex;
+    if(arrayIndex === current || arrayIndex === current + 1) {
+      this.clearDrop();
+      return;
+    }
+    if(this.dragEntry.depth === 1 && arrayIndex <= 0) {
+      this.clearDrop();
+      return;
+    }
+    const edge = (() => {
+      if(!after) {
+        return hit.offsetTop;
+      }
+      let index = at + 1;
+      while(index < entries.length && entries[index].depth > candidate.depth) {
+        index += 1;
+      }
+      const last = this.rows[index - 1]?.parentElement as HTMLElement;
+      if(last === undefined || last === null) {
+        return hit.offsetTop + hit.offsetHeight;
+      }
+      return last.offsetTop + last.offsetHeight;
+    })();
+    this.dropTarget = arrayIndex;
+    const top = edge - INDICATOR_HEIGHT / 2;
+    const line = this.state.dropLine;
+    if(line === null || line.top !== top || line.depth !== candidate.depth) {
+      this.setState({dropLine: {top, depth: candidate.depth}});
+    }
+  }
+
+  private clearDrop(): void {
+    this.dropTarget = null;
+    if(this.state.dropLine !== null) {
+      this.setState({dropLine: null});
+    }
+  }
+
+  private commitDrop(): void {
+    if(this.dropTarget === null) {
+      return;
+    }
+    const list = this.siblingsOf(this.dragEntry);
+    const current = list.indexOf(this.dragEntry.node);
+    const finalIndex = this.dropTarget > current ?
+      this.dropTarget - 1 : this.dropTarget;
+    const offset = finalIndex - current;
+    if(this.dragEntry.depth === 0) {
+      this.props.onMoveSection?.(this.dragEntry.component, offset);
+    } else {
+      this.props.onMoveScenario?.(this.dragEntry.node as Layout, offset);
+    }
+  }
+
+  private endDrag(): void {
+    window.removeEventListener('mousemove', this.onRowMouseMove);
+    window.removeEventListener('mouseup', this.onRowMouseUp);
+    window.removeEventListener('keydown', this.onDragKeyDown);
+    this.dragOrigin = null;
+    this.dragActive = false;
+    this.dragEntry = null;
+    this.dropTarget = null;
+    if(this.state.dragging !== null || this.state.dropLine !== null) {
+      this.setState({dragging: null, dropLine: null});
+    }
   }
 
   /** Opens or shuts a set of nodes together. */
@@ -589,6 +810,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       fontSize: '12px'
     },
     tree: {
+      position: 'relative' as 'relative',
       flexGrow: 1,
       minWidth: 0,
       display: 'flex',
@@ -622,6 +844,31 @@ export class OutlinePanel extends React.Component<Properties, State> {
     },
     working: {
       backgroundColor: '#F0ECFA'
+    },
+    dragging: {
+      backgroundColor: '#F0ECFA'
+    },
+    indicator: {
+      position: 'absolute' as 'absolute',
+      right: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      height: `${INDICATOR_HEIGHT}px`,
+      pointerEvents: 'none' as 'none'
+    },
+    indicatorDot: {
+      flexShrink: 0,
+      width: '8px',
+      height: '8px',
+      borderRadius: '50%',
+      border: '2px solid #684BC7',
+      backgroundColor: '#FFFFFF',
+      boxSizing: 'border-box' as 'border-box'
+    },
+    indicatorLine: {
+      flexGrow: 1,
+      height: '2px',
+      backgroundColor: '#684BC7'
     },
     chosen: {
       backgroundColor: '#684BC7',
