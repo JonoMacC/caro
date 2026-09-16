@@ -53,6 +53,19 @@ const HINT_SIZE = 13;
 /** How far apart two edges may be and still count as aligned. */
 const ALIGN_TOLERANCE = 0.5;
 
+/** How close a dragged or resized edge must come to another box's edge to
+    snap to it, in pixels of screen, held to that regardless of the
+    canvas's zoom. */
+const SNAP_DISTANCE = 6;
+
+/** How thick the ring around a box aligned with a snap is painted, in
+    pixels of screen, held to that regardless of the canvas's zoom. */
+const ALIGN_RING = 2;
+
+/** How thick a snap guide is painted, in pixels of screen, held to that
+    regardless of the canvas's zoom. */
+const GUIDE_THICKNESS = 1;
+
 /** The smallest a canvas is drawn, whatever it holds. */
 const FLOOR = {width: 400, height: 300};
 
@@ -270,7 +283,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       if(this.state.aligned.indexOf(box) === -1) {
         return {};
       }
-      return LayoutCanvas.STYLE.aligned;
+      return this.alignedStyle();
     })();
     return (
       <div key={this.keyOf(box)} data-keeps-selection=''
@@ -344,11 +357,14 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   }
 
   private renderGuide = (guide: Guide, index: number) => {
+    const thickness = `${this.local(GUIDE_THICKNESS)}px`;
     const style = (() => {
       if(guide.vertical) {
-        return {left: `${guide.offset}px`, top: 0, bottom: 0, width: '1px'};
+        return {left: `${guide.offset}px`, top: 0, bottom: 0,
+          width: thickness};
       }
-      return {top: `${guide.offset}px`, left: 0, right: 0, height: '1px'};
+      return {top: `${guide.offset}px`, left: 0, right: 0,
+        height: thickness};
     })();
     return (
       <div key={index}
@@ -358,6 +374,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   /** Converts a length in pixels of screen into one in the layout. */
   private local(value: number): number {
     return value / this.props.zoom;
+  }
+
+  /** Returns the outline marking a box aligned with a snap. */
+  private alignedStyle() {
+    const ring = this.local(ALIGN_RING);
+    return {
+      outline: `${ring}px solid #E63F44`,
+      outlineOffset: `-${ring}px`
+    };
   }
 
   /** Converts a place on screen into a place in the layout. */
@@ -579,7 +604,8 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     });
   }
 
-  /** Moves the held boxes by however far the cursor has travelled. */
+  /** Moves the held boxes by however far the cursor has travelled, pulled
+      the rest of the way to a nearby edge when it comes close enough. */
   private move(point: Point): void {
     const across = point.x - this.state.origin.x;
     const down = point.y - this.state.origin.y;
@@ -587,20 +613,97 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       x: Math.max(across, -Math.min(...this.held.map(held => held.x))),
       y: Math.max(down, -Math.min(...this.held.map(held => held.y)))
     };
+    const snapped = this.snap(shift);
     for(const held of this.held) {
-      held.box.x = Math.round(held.x + shift.x);
-      held.box.y = Math.round(held.y + shift.y);
+      held.box.x = Math.round(held.x + snapped.x);
+      held.box.y = Math.round(held.y + snapped.y);
     }
     this.props.onChange?.();
   }
 
-  /** Resizes the held boxes, moving only the edges the press has hold of. */
+  /** Pulls a drag's shift toward a nearby box's edge, using the same
+      bounding region the alignment guides already measure, so landing
+      close is as good as landing exactly. */
+  private snap(shift: Point): Point {
+    const distance = this.local(SNAP_DISTANCE);
+    const left = Math.min(...this.held.map(held => held.x)) + shift.x;
+    const right = Math.max(
+      ...this.held.map(held => held.x + held.width)) + shift.x;
+    const top = Math.min(...this.held.map(held => held.y)) + shift.y;
+    const bottom = Math.max(
+      ...this.held.map(held => held.y + held.height)) + shift.y;
+    const across = LayoutCanvas.closest([left, right],
+      this.edgesAlong(true), distance);
+    const down = LayoutCanvas.closest([top, bottom],
+      this.edgesAlong(false), distance);
+    return {x: shift.x + across, y: shift.y + down};
+  }
+
+  /** Returns every edge along an axis belonging to a box other than the
+      ones the current gesture holds. */
+  private edgesAlong(vertical: boolean): number[] {
+    const moving = this.held.map(held => held.box);
+    const edges = [] as number[];
+    for(const other of this.props.boxes) {
+      if(moving.indexOf(other) !== -1) {
+        continue;
+      }
+      edges.push(vertical ? other.x : other.y,
+        vertical ? other.right : other.bottom);
+    }
+    return edges;
+  }
+
+  /** Returns the smallest correction that lands one of the given
+      positions on one of the given edges, or 0 if none is within
+      distance. */
+  private static closest(positions: number[], edges: number[],
+      distance: number): number {
+    let best = 0;
+    let found = null as number;
+    for(const position of positions) {
+      for(const edge of edges) {
+        const delta = edge - position;
+        if(Math.abs(delta) > distance) {
+          continue;
+        }
+        if(found === null || Math.abs(delta) < Math.abs(found)) {
+          found = delta;
+          best = delta;
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Resizes the held boxes, moving only the edges the press has hold of,
+      pulled the rest of the way to a nearby edge when it comes close
+      enough. */
   private resize(point: Point): void {
     this.restore();
     const handle = this.state.handle;
-    const across = point.x - this.state.origin.x;
-    const down = point.y - this.state.origin.y;
+    const distance = this.local(SNAP_DISTANCE);
     const region = extentOf(this.held.map(held => held.box));
+    const rawAcross = point.x - this.state.origin.x;
+    const rawDown = point.y - this.state.origin.y;
+    let across = rawAcross;
+    if(handle.right) {
+      across = rawAcross + LayoutCanvas.closest(
+        [region.x + region.width + rawAcross], this.edgesAlong(true),
+        distance);
+    } else if(handle.left) {
+      across = rawAcross + LayoutCanvas.closest(
+        [region.x + rawAcross], this.edgesAlong(true), distance);
+    }
+    let down = rawDown;
+    if(handle.bottom) {
+      down = rawDown + LayoutCanvas.closest(
+        [region.y + region.height + rawDown], this.edgesAlong(false),
+        distance);
+    } else if(handle.top) {
+      down = rawDown + LayoutCanvas.closest(
+        [region.y + rawDown], this.edgesAlong(false), distance);
+    }
     for(const held of this.held) {
       if(handle.right && held.x + held.width >= region.x + region.width - 1) {
         held.box.width = Math.max(Math.round(held.width + across),
@@ -889,10 +992,6 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     idle: {
       outline: '2px solid transparent',
       outlineOffset: '1px'
-    },
-    aligned: {
-      outline: '2px solid #E63F44',
-      outlineOffset: '-2px'
     },
     remove: {
       position: 'absolute' as 'absolute',
