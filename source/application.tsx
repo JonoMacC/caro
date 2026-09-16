@@ -189,6 +189,9 @@ export class Application extends React.Component<{}, State> {
       } else if(event.key === 'y' || event.key === 'Y') {
         event.preventDefault();
         this.onRedo();
+      } else if(event.key === 'd' || event.key === 'D') {
+        event.preventDefault();
+        this.onDuplicate(event);
       }
       return;
     }
@@ -486,6 +489,18 @@ export class Application extends React.Component<{}, State> {
     this.clipboard = copyBoxes(this.state.selection);
     this.setState({status: Application.count(this.state.selection.length,
       'Copied')});
+  }
+
+  /** Copies the selection and pastes it in one step, leaving the pasted
+      boxes selected exactly as Copy followed by Paste would. Does nothing
+      when there is no selection, even if the clipboard already holds a
+      scenario copied some other way. */
+  private onDuplicate = (event: KeyboardEvent) => {
+    if(this.state.selection.length === 0) {
+      return;
+    }
+    this.onCopy(event);
+    this.onPaste(event);
   }
 
   private onCopyScenario = (layout: Layout) => {
