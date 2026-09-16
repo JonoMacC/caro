@@ -188,10 +188,12 @@ async function main() {
     window.__outline = () => {
       const panel = document.querySelector('[data-outline]');
       return Array.from(
-        panel.querySelectorAll('div > button:nth-child(2)')).map(b => {
-          const pad = parseInt(b.parentElement.style.paddingLeft) / 12;
+        panel.querySelectorAll('div > button:last-child')).map(b => {
+          const twist = b.previousElementSibling;
+          const pad = twist ? (parseInt(twist.style.width) - 14) / 12 :
+            (parseInt(b.style.paddingLeft) - 16) / 12;
           return {
-            label: '..'.repeat(pad) + b.textContent.trim(),
+            label: '..'.repeat(pad) + b.children[0].textContent.trim(),
             amiss: getComputedStyle(b).color === 'rgb(178, 34, 34)',
             warned: getComputedStyle(b).color === 'rgb(138, 109, 0)'
           };

@@ -72,8 +72,8 @@ async function main(){
       .map(s => s.replace('rgb(116, 75, 255) ', '').replace(' inset', ''));
   })()`);
   const noted = () => evaluate(`(() => {
-    const notes = Array.from(
-      document.querySelectorAll('[data-outline] div > span'));
+    const notes = Array.from(document.querySelectorAll(
+      '[data-outline] div > button > span:nth-child(2)'));
     return notes.map(s => s.textContent).filter(t => /^\\d+x\\d+/.test(t));
   })()`);
 

@@ -34,34 +34,37 @@ async function main(){
   // Every row of the tree, indented by its depth.
   const rows = () => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    return Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
+    return Array.from(panel.querySelectorAll('div > button:last-child'))
       .map(b => {
-        const pad = parseInt(b.parentElement.style.paddingLeft) / 12;
-        return '..'.repeat(pad) + b.textContent.trim();
+        const twist = b.previousElementSibling;
+        const pad = twist ? (parseInt(twist.style.width) - 14) / 12 :
+          (parseInt(b.style.paddingLeft) - 16) / 12;
+        return '..'.repeat(pad) + b.children[0].textContent.trim();
       });
   })()`);
   const clickRow = label => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    const row = Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)});
+    const row = Array.from(panel.querySelectorAll('div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === ${JSON.stringify(label)});
     if(row === undefined) { return false; }
     row.click();
     return true;
   })()`);
   const clickNoted = note => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    const marks = Array.from(panel.querySelectorAll('div > span'));
+    const marks = Array.from(
+      panel.querySelectorAll('div > button > span:nth-child(2)'));
     const mark = marks.find(
       s => s.textContent === ${JSON.stringify(note)});
     if(mark === undefined) { return false; }
-    mark.parentElement.querySelector('button:nth-child(2)').click();
+    mark.parentElement.click();
     return true;
   })()`);
   const twist = label => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    const row = Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)});
-    row.parentElement.firstChild.click();
+    const row = Array.from(panel.querySelectorAll('div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === ${JSON.stringify(label)});
+    row.previousElementSibling.click();
     return true;
   })()`);
   const selected = () => evaluate(`(() => {
@@ -89,7 +92,7 @@ async function main(){
     ['Main', '..default', '....space', '....space']);
   const places = await evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    return Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
+    return Array.from(panel.querySelectorAll('div > button:last-child'))
       .map(b => b.title).filter(t => t.indexOf(' at ') !== -1);
   })()`);
   console.log('   titles: ' + JSON.stringify(places));
@@ -113,7 +116,8 @@ async function main(){
   // The size carries the colours of the policies that decide it.
   const shades = await evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    const mark = Array.from(panel.querySelectorAll('div > span'))
+    const mark = Array.from(
+        panel.querySelectorAll('div > button > span:nth-child(2)'))
       .find(s => s.textContent === '200x80');
     return Array.from(mark.querySelectorAll('span'))
       .map(s => getComputedStyle(s).color);
@@ -213,11 +217,11 @@ async function main(){
     await pause(220);
   };
   const focused = () => evaluate(
-    `document.activeElement.textContent.trim()`);
+    `document.activeElement.children[0].textContent.trim()`);
   const labelAt = async index =>
     (await rows())[index].replace(/^\.+/, '');
   await evaluate(`document.querySelectorAll(
-    '[data-outline] div > button:nth-child(2)')[0].focus()`);
+    '[data-outline] div > button:last-child')[0].focus()`);
   await pause(200);
   check('the first row takes the focus', await focused(), await labelAt(0));
   await press('ArrowDown');
@@ -245,17 +249,17 @@ async function main(){
   // press would make it.
   const focusIndex = () => evaluate(`(() => {
     const rows = Array.from(document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)'));
+      '[data-outline] div > button:last-child'));
     return rows.indexOf(document.activeElement);
   })()`);
   const noteAt = index => evaluate(`(() => {
     const notes = Array.from(document.querySelectorAll(
-      '[data-outline] div > span'));
+      '[data-outline] div > button > span:nth-child(2)'));
     return notes[${index}].textContent;
   })()`);
   const workingRow = () => evaluate(`(() => {
     const rows = Array.from(document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)')).map(b => b.parentElement);
+      '[data-outline] div > button:last-child')).map(b => b.parentElement);
     return rows.findIndex(r =>
       getComputedStyle(r).backgroundColor === 'rgb(240, 236, 250)');
   })()`);
