@@ -72,8 +72,10 @@ async function main(){
     b.name + ' ' + b.width + 'x' + b.height + '@' + b.x + ',' + b.y).join('  '));
   const a = drawn.find(b => b.name === '<A>');
   const b = drawn.find(b => b.name === '<B>');
+  // Dropped 5 short of an exact carry, but A's center lands within reach
+  // of B's, so it's pulled the last 5 pixels onto it.
   check('the carried box went where it was dropped',
-    [a.x, a.y], [200, 140]);
+    [a.x, a.y], [200, 135]);
   check('and the box it landed on stayed where it was',
     [b.x, b.y], [250, 120]);
   // a converted specification opens and draws where it was drawn

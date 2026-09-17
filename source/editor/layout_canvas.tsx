@@ -85,6 +85,13 @@ interface Point {
 interface Guide {
   vertical: boolean;
   offset: number;
+
+  /** The span the guide is drawn across, along the axis it doesn't sit
+      on: the whole canvas for a guide following an edge, but only from
+      the center of the box it followed to the far edge of the box it
+      matched for one following a center. */
+  from: number;
+  to: number;
 }
 
 /** A request to bring a box into view, made afresh each time one is asked
@@ -358,13 +365,14 @@ export class LayoutCanvas extends React.Component<Properties, State> {
 
   private renderGuide = (guide: Guide, index: number) => {
     const thickness = `${this.local(GUIDE_THICKNESS)}px`;
+    const span = `${guide.to - guide.from}px`;
     const style = (() => {
       if(guide.vertical) {
-        return {left: `${guide.offset}px`, top: 0, bottom: 0,
-          width: thickness};
+        return {left: `${guide.offset}px`, top: `${guide.from}px`,
+          height: span, width: thickness};
       }
-      return {top: `${guide.offset}px`, left: 0, right: 0,
-        height: thickness};
+      return {top: `${guide.offset}px`, left: `${guide.from}px`,
+        width: span, height: thickness};
     })();
     return (
       <div key={index}
@@ -632,26 +640,28 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     const top = Math.min(...this.held.map(held => held.y)) + shift.y;
     const bottom = Math.max(
       ...this.held.map(held => held.y + held.height)) + shift.y;
-    const across = LayoutCanvas.closest([left, right],
-      this.edgesAlong(true), distance);
-    const down = LayoutCanvas.closest([top, bottom],
-      this.edgesAlong(false), distance);
+    const across = LayoutCanvas.closest([left, right, (left + right) / 2],
+      this.targetsAlong(true), distance);
+    const down = LayoutCanvas.closest([top, bottom, (top + bottom) / 2],
+      this.targetsAlong(false), distance);
     return {x: shift.x + across, y: shift.y + down};
   }
 
-  /** Returns every edge along an axis belonging to a box other than the
-      ones the current gesture holds. */
-  private edgesAlong(vertical: boolean): number[] {
+  /** Returns every edge and center along an axis belonging to a box
+      other than the ones the current gesture holds, for a drag or
+      resize to line up against. */
+  private targetsAlong(vertical: boolean): number[] {
     const moving = this.held.map(held => held.box);
-    const edges = [] as number[];
+    const targets = [] as number[];
     for(const other of this.props.boxes) {
       if(moving.indexOf(other) !== -1) {
         continue;
       }
-      edges.push(vertical ? other.x : other.y,
-        vertical ? other.right : other.bottom);
+      targets.push(vertical ? other.x : other.y,
+        vertical ? other.right : other.bottom,
+        vertical ? other.x + other.width / 2 : other.y + other.height / 2);
     }
-    return edges;
+    return targets;
   }
 
   /** Returns the smallest correction that lands one of the given
@@ -689,20 +699,20 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     let across = rawAcross;
     if(handle.right) {
       across = rawAcross + LayoutCanvas.closest(
-        [region.x + region.width + rawAcross], this.edgesAlong(true),
+        [region.x + region.width + rawAcross], this.targetsAlong(true),
         distance);
     } else if(handle.left) {
       across = rawAcross + LayoutCanvas.closest(
-        [region.x + rawAcross], this.edgesAlong(true), distance);
+        [region.x + rawAcross], this.targetsAlong(true), distance);
     }
     let down = rawDown;
     if(handle.bottom) {
       down = rawDown + LayoutCanvas.closest(
-        [region.y + region.height + rawDown], this.edgesAlong(false),
+        [region.y + region.height + rawDown], this.targetsAlong(false),
         distance);
     } else if(handle.top) {
       down = rawDown + LayoutCanvas.closest(
-        [region.y + rawDown], this.edgesAlong(false), distance);
+        [region.y + rawDown], this.targetsAlong(false), distance);
     }
     for(const held of this.held) {
       if(handle.right && held.x + held.width >= region.x + region.width - 1) {
@@ -785,7 +795,8 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     return extent >= available * FILL_RATIO && extent <= available;
   }
 
-  /** Measures what the boxes being moved line up with. */
+  /** Measures what the boxes being moved line up with, on their edges or
+      on their center. */
   private measureGuides(): {guides: Guide[], aligned: Box[]} {
     const moving = this.held.map(held => held.box);
     if(moving.length === 0) {
@@ -794,17 +805,39 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     const region = extentOf(moving);
     const verticals = [region.x, region.x + region.width];
     const horizontals = [region.y, region.y + region.height];
+    const dragging = this.state.gesture === Gesture.DRAG;
+    const centerX = region.x + region.width / 2;
+    const centerY = region.y + region.height / 2;
+    const extent = this.extent();
     const guides = [] as Guide[];
     const aligned = [] as Box[];
     for(const other of this.props.boxes) {
       if(moving.indexOf(other) !== -1) {
         continue;
       }
+      const otherCenterX = other.x + other.width / 2;
+      const otherCenterY = other.y + other.height / 2;
       const across = LayoutCanvas.collect(guides, verticals,
-        [other.x, other.right], true);
+        [other.x, other.right, otherCenterX], true, 0, extent.height);
       const down = LayoutCanvas.collect(guides, horizontals,
-        [other.y, other.bottom], false);
-      if(across || down) {
+        [other.y, other.bottom, otherCenterY], false, 0, extent.width);
+      // The moved box's own center only counts as a snap point while
+      // dragging -- a resize only moves one edge, so its center is
+      // incidental to the resize rather than something the user placed.
+      let centered = false;
+      if(dragging && Math.abs(centerX - otherCenterX) <= ALIGN_TOLERANCE) {
+        const far = LayoutCanvas.farEdge(centerY, other.y, other.bottom);
+        LayoutCanvas.mark(guides, true, centerX,
+          Math.min(centerY, far), Math.max(centerY, far));
+        centered = true;
+      }
+      if(dragging && Math.abs(centerY - otherCenterY) <= ALIGN_TOLERANCE) {
+        const far = LayoutCanvas.farEdge(centerX, other.x, other.right);
+        LayoutCanvas.mark(guides, false, centerY,
+          Math.min(centerX, far), Math.max(centerX, far));
+        centered = true;
+      }
+      if(across || down || centered) {
         aligned.push(other);
       }
     }
@@ -814,8 +847,14 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     return {guides, aligned};
   }
 
+  /** Returns whichever of two edges is farther from a reference point,
+      the "far edge" a center guide reaches for. */
+  private static farEdge(from: number, a: number, b: number): number {
+    return Math.abs(a - from) > Math.abs(b - from) ? a : b;
+  }
+
   private static collect(guides: Guide[], moving: number[], edges: number[],
-      vertical: boolean): boolean {
+      vertical: boolean, from: number, to: number): boolean {
     let found = false;
     for(const position of moving) {
       for(const edge of edges) {
@@ -823,14 +862,20 @@ export class LayoutCanvas extends React.Component<Properties, State> {
           continue;
         }
         found = true;
-        const known = guides.some(guide => guide.vertical === vertical &&
-          Math.abs(guide.offset - edge) <= ALIGN_TOLERANCE);
-        if(!known) {
-          guides.push({vertical, offset: edge});
-        }
+        LayoutCanvas.mark(guides, vertical, edge, from, to);
       }
     }
     return found;
+  }
+
+  /** Adds a guide unless one already sits at the same offset. */
+  private static mark(guides: Guide[], vertical: boolean, offset: number,
+      from: number, to: number): void {
+    const known = guides.some(guide => guide.vertical === vertical &&
+      Math.abs(guide.offset - offset) <= ALIGN_TOLERANCE);
+    if(!known) {
+      guides.push({vertical, offset, from, to});
+    }
   }
 
   private onKeyDown = (event: KeyboardEvent) => {

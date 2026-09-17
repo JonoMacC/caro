@@ -185,19 +185,20 @@ async function main() {
   const during = await evaluate(GUIDES);
   console.log('   during the drag:', during.length, 'guides');
   check('guides appear while dragging', during.length > 0, true);
-  const edges = await evaluate(`(() => {
+  const snapPoints = await evaluate(`(() => {
     const out = [];
     const walk = e => { for(const c of e.children) {
       if(c.style.boxShadow.indexOf('inset') !== -1) {
         const r = c.getBoundingClientRect();
-        out.push(r.left, r.right, r.top, r.bottom);
+        out.push(r.left, r.right, r.top, r.bottom,
+          r.left + r.width / 2, r.top + r.height / 2);
       } else if(c.children.length) walk(c); } };
     walk(document.querySelector('[data-canvas]'));
     return out;
   })()`);
   const stray = during.filter(g =>
-    !edges.some(edge => Math.abs(edge - g.at) < 1.5));
-  check('every guide drawn while dragging sits on a real edge',
+    !snapPoints.some(point => Math.abs(point - g.at) < 1.5));
+  check('every guide drawn while dragging sits on a real edge or center',
     stray.length, 0);
   const litDrag = await evaluate(HIGHLIGHTED);
   console.log('   highlighted while dragging:', JSON.stringify(litDrag));
@@ -275,6 +276,99 @@ async function main() {
   boxes = await evaluate(RECTS);
   check('the same few screen pixels still snap when zoomed in',
     named(boxes, '<C>').right, named(boxes, '<D>').left);
+
+  // Back to 100% -- the zoom test above left it zoomed in.
+  await evaluate(`Array.from(document.querySelectorAll('button'))
+    .find(b => b.title === 'Back to the literal size').click()`);
+  await new Promise(r => setTimeout(r, 300));
+
+  // Centers are snap points too: two boxes of different heights, dragged
+  // so their vertical centers line up though no edge does.
+  await fresh();
+  await draw(20, 20, 220, 100, 'E');   // 200x80, center at (120, 60)
+  await draw(300, 150, 420, 270, 'F'); // 120x120, center at (360, 210)
+  boxes = await evaluate(RECTS);
+  let e = named(boxes, '<E>');
+  let f = named(boxes, '<F>');
+  const dy = f.y - e.y;
+  await mouse('mousePressed', e.x, e.y);
+  for(let i = 1; i <= 8; ++i) {
+    await mouse('mouseMoved', e.x, e.y + dy * i / 8, 1);
+  }
+  const centered = await evaluate(GUIDES);
+  const centerGuide = centered.find(g => !g.vertical);
+  check('a guide appears when centers line up, not just edges',
+    centerGuide !== undefined, true);
+  check('it sits on the shared center', centerGuide !== undefined &&
+    Math.abs(centerGuide.at - f.y) <= 1, true);
+  check('it only spans from the center to the far edge of the other box',
+    centerGuide !== undefined && Math.round(centerGuide.span),
+    Math.abs(f.right - e.x));
+  check('both boxes are highlighted for a center match',
+    (await evaluate(HIGHLIGHTED)).join(','), '<E>,<F>');
+  await mouse('mouseReleased', e.x, e.y + dy);
+  await new Promise(r => setTimeout(r, 150));
+  check('a center guide clears once the gesture ends',
+    (await evaluate(GUIDES)).length, 0);
+
+  // Dragged within reach, a box's own center is pulled onto another's.
+  await fresh();
+  await draw(20, 20, 120, 80, 'G');    // 100x60, center at (70, 50)
+  await draw(300, 150, 360, 310, 'H'); // 60x160, center at (330, 230)
+  boxes = await evaluate(RECTS);
+  await dragBy(named(boxes, '<G>'),
+    named(boxes, '<H>').x - named(boxes, '<G>').x - 3);
+  boxes = await evaluate(RECTS);
+  check('dropping within reach snaps a center onto another center',
+    named(boxes, '<G>').x, named(boxes, '<H>').x);
+
+  // A resized edge can snap onto another box's center line too, the same
+  // way it already snaps onto an edge -- no separate magnetism of its own.
+  await fresh();
+  await draw(20, 20, 220, 120, 'I');  // right edge at 220
+  await draw(400, 20, 500, 120, 'J'); // 100 wide, center at x=450
+  boxes = await evaluate(RECTS);
+  let i = named(boxes, '<I>');
+  const j = named(boxes, '<J>');
+  await mouse('mousePressed', i.right - 2, i.y);
+  await mouse('mouseMoved', j.x - 3, i.y, 1);
+  await mouse('mouseMoved', j.x - 3, i.y, 1);
+  const nearCenter = await evaluate(GUIDES);
+  const edgeOntoCenter = nearCenter.find(g => g.vertical);
+  check('a guide appears when a resized edge nears another box\'s center',
+    edgeOntoCenter !== undefined && Math.abs(edgeOntoCenter.at - j.x) <= 1,
+    true);
+  await mouse('mouseReleased', j.x - 3, i.y);
+  await new Promise(r => setTimeout(r, 150));
+  i = named(await evaluate(RECTS), '<I>');
+  check('resizing an edge within reach snaps it onto another box\'s center',
+    i.right, j.x);
+
+  // Resizing a box can happen to leave its own overall center matching
+  // another box's center -- but that's incidental to the resize, not
+  // something the user placed, so it gets none of a drag's center
+  // treatment: no guide, and the edge isn't pulled onto it.
+  await fresh();
+  await draw(20, 20, 120, 120, 'K');  // 100x100, right edge at 120
+  await draw(200, 20, 300, 120, 'L'); // 100x100, center at x=250
+  boxes = await evaluate(RECTS);
+  let k = named(boxes, '<K>');
+  const l = named(boxes, '<L>');
+  const selfCenterTarget = 2 * l.x - k.left;
+  await mouse('mousePressed', k.right - 2, k.y);
+  for(let step = 1; step <= 10; ++step) {
+    await mouse('mouseMoved',
+      k.right + (selfCenterTarget - 3 - k.right) * step / 10, k.y, 1);
+  }
+  const duringResize = await evaluate(GUIDES);
+  check('no center guide appears when a resize only makes its own ' +
+    'center coincide with another\'s', duringResize.some(g =>
+      g.vertical && Math.abs(g.at - l.x) <= 1 && g.span < 400), false);
+  await mouse('mouseReleased', selfCenterTarget - 3, k.y);
+  await new Promise(r => setTimeout(r, 150));
+  k = named(await evaluate(RECTS), '<K>');
+  check('and its edge isn\'t pulled by that incidental self-center match',
+    Math.abs(k.right - (selfCenterTarget - 3)) <= 2, true);
 
   console.log(failures === 0 ? '\nalignment guides work' :
     `\n${failures} FAILURES`);

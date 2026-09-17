@@ -168,8 +168,10 @@ async function main() {
   await drag({x: pair[0].left + pair[0].width / 2, y: bottom - 1},
     {x: pair[0].left + pair[0].width / 2, y: bottom - 1 + 30});
   drawn = await boxes();
+  // Dragged 5 short of 30, but that edge lands within reach of C's own
+  // center, so it's pulled the last 5 pixels onto it.
   check('resizing the group from the bottom grows only its lowest box',
-    drawn.map(box => box.height - before[drawn.indexOf(box)]), [0, 30, 0]);
+    drawn.map(box => box.height - before[drawn.indexOf(box)]), [0, 35, 0]);
 
   // Resize from the right: both boxes are right-most, so both widen.
   drawn = await boxes();

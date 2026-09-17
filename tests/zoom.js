@@ -183,7 +183,8 @@ async function main() {
     Array.from(document.querySelectorAll('[data-keeps-selection]'))
       .filter(e => e.style.boxShadow.indexOf('inset') !== -1)
       .forEach(e => { const r = e.getBoundingClientRect();
-        vertical.push(r.left, r.right); horizontal.push(r.top, r.bottom); });
+        vertical.push(r.left, r.right, r.left + r.width / 2);
+        horizontal.push(r.top, r.bottom, r.top + r.height / 2); });
     return {guides, vertical, horizontal};
   })()`;
   drawn = await boxes();
@@ -199,8 +200,8 @@ async function main() {
     const edges = guide.vertical ? seen.vertical : seen.horizontal;
     return !edges.some(edge => Math.abs(edge - guide.at) <= 1.5);
   });
-  check('and every guide sits exactly on a real edge', astray, []);
-  console.log(`     ${seen.guides.length} guides, all on edges`);
+  check('and every guide sits exactly on a real edge or center', astray, []);
+  console.log(`     ${seen.guides.length} guides, all on edges or centers`);
 
   const wheel = await evaluate(`(() => {
     const r = document.querySelector(
