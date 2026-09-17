@@ -64,6 +64,9 @@ interface Properties {
   /** Called to remove one of a scenario's layers. */
   onRemoveLayer?: (layout: Layout, layer: number) => void;
 
+  /** Called to rename a box. */
+  onRenameBox?: (box: Box, name: string) => void;
+
 }
 
 /** Displays every scenario of a component side by side. */
@@ -149,7 +152,8 @@ export class ScenarioBoard extends React.Component<Properties> {
           reveal={this.props.reveal}
           onSelect={this.props.onSelect} onChange={this.props.onChange}
           onCommit={this.props.onCommit}
-          onRemove={this.props.onRemoveBox}/>
+          onRemove={this.props.onRemoveBox}
+          onRenameBox={this.props.onRenameBox}/>
         {layout.overlays.map((overlay, layer) =>
           this.renderLayer(layout, overlay, layer))}
         {this.renderAddLayer(layout, index)}
@@ -173,7 +177,8 @@ export class ScenarioBoard extends React.Component<Properties> {
           reveal={this.props.reveal}
           onSelect={this.props.onSelect} onChange={this.props.onChange}
           onCommit={this.props.onCommit}
-          onRemove={this.props.onRemoveBox}/>
+          onRemove={this.props.onRemoveBox}
+          onRenameBox={this.props.onRenameBox}/>
       </div>);
   }
 
