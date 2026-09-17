@@ -272,6 +272,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       }
       return LayoutCanvas.STYLE.aligned;
     })();
+    const elevated = this.isHeld(box) ? LayoutCanvas.STYLE.elevated : {};
     return (
       <div key={this.keyOf(box)} data-keeps-selection=''
           ref={element => this.elements.set(box, element)}
@@ -279,7 +280,8 @@ export class LayoutCanvas extends React.Component<Properties, State> {
             left: `${box.x}px`, top: `${box.y}px`,
             width: `${box.width}px`, height: `${box.height}px`,
             ...LayoutCanvas.paintFor(box, marked), ...selection,
-            ...alignment, ...LayoutCanvas.cursorFor(this.state.handle)}}>
+            ...alignment, ...elevated,
+            ...LayoutCanvas.cursorFor(this.state.handle)}}>
         {label !== '' &&
           <span style={{...LayoutCanvas.STYLE.label,
             ...LayoutCanvas.inkFor(box),
@@ -481,6 +483,19 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   private chosen(): Box[] {
     return this.props.boxes.filter(
       box => this.props.selection.indexOf(box) !== -1);
+  }
+
+  /** Whether a box is one of the ones currently being dragged or resized,
+      so its own render can bring it to the front — a purely visual
+      reordering; the array `boxes` (and so the outline panel's own order)
+      is never touched. `held` alone isn't enough to answer this, since it
+      stays populated after a gesture ends. */
+  private isHeld(box: Box): boolean {
+    if(this.state.gesture !== Gesture.DRAG &&
+        this.state.gesture !== Gesture.RESIZE) {
+      return false;
+    }
+    return this.held.some(held => held.box === box);
   }
 
   private onHover = (event: React.MouseEvent) => {
@@ -893,6 +908,9 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     aligned: {
       outline: '2px solid #E63F44',
       outlineOffset: '-2px'
+    },
+    elevated: {
+      zIndex: 1
     },
     remove: {
       position: 'absolute' as 'absolute',
