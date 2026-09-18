@@ -125,24 +125,19 @@ async function main(){
   check('a box names its size in the colours of its policies', shades,
     ['rgb(178, 131, 0)', 'rgb(178, 131, 0)']);
 
-  // A label opens or shuts everything under it, layers included.
+  // A label switches to what it names but no longer folds anything;
+  // folding is the twisty's job alone.
   await evaluate(`Array.from(document.querySelectorAll('button'))
     .find(b => b.textContent.trim() === 'Add a layer').click()`);
   await pause(500);
+  const withLayer = await rows();
   await clickRow('Main');
   await pause(400);
-  check('clicking an open section shuts all of it', await rows(), ['Main']);
+  check('clicking an open section leaves it open, not folding it',
+    await rows(), withLayer);
   await clickRow('Main');
   await pause(400);
-  check('and clicking it again opens all of it, layers included',
-    await rows(),
-    ['Main', '..default', '....space', '....space', '....space',
-      '....Layer 1']);
-  await clickRow('Main');
-  await pause(400);
-  check('and again shuts it', await rows(), ['Main']);
-  await clickRow('Main');
-  await pause(400);
+  check('clicking it again still leaves it open', await rows(), withLayer);
 
   // Sections, and reaching a box in one that is not on screen.
   await evaluate(`Array.from(document.querySelectorAll('button')).find(b=>b.title==='Add a section').click()`);
@@ -187,6 +182,8 @@ async function main(){
 
   // A selected box is ringed just inside its own edge
   await clickRow('Main');
+  await pause(300);
+  await twist('Main');
   await pause(300);
   await clickNoted('10x10');
   await pause(300);

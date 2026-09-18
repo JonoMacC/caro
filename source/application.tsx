@@ -64,7 +64,9 @@ export class Application extends React.Component<{}, State> {
             onSection={this.onSelectSection} onActivate={this.onActivate}
             onReveal={this.onReveal} onHover={this.onHover}
             onMoveSection={this.onMoveSection}
-            onMoveScenario={this.onMoveScenario}/>}
+            onMoveScenario={this.onMoveScenario} onRename={this.onRename}
+            onCondition={this.onCondition}
+            onRenameBox={this.onRenameBox}/>}
         <div style={Application.STYLE.content}>
           {this.renderToolbar()}
           {this.renderBody()}
@@ -317,7 +319,8 @@ export class Application extends React.Component<{}, State> {
           onCondition={this.onCondition}
           onProperties={this.onProperties} zoom={this.state.zoom}
           onZoom={this.onZoom} onAddLayer={this.onAddLayer}
-          onRemoveLayer={this.onRemoveLayer}/>);
+          onRemoveLayer={this.onRemoveLayer}
+          onRenameBox={this.onRenameBox}/>);
     }
     return (
       <div style={Application.STYLE.placeholder}>
@@ -650,6 +653,11 @@ export class Application extends React.Component<{}, State> {
 
   private onEdit = (tag: string) => {
     this.commit({}, tag);
+  }
+
+  private onRenameBox = (box: Box, name: string) => {
+    box.name = name;
+    this.commit({}, 'name');
   }
 
   private onSave = async () => {

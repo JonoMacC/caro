@@ -78,6 +78,9 @@ interface Entry {
   /** Whether the row can be dragged to reorder it among its siblings. */
   draggable: boolean;
 
+  /** Whether the row's name can be edited inline. */
+  renamable: boolean;
+
   /** How the row is marked out from the rest. */
   style: object;
 
@@ -127,6 +130,15 @@ interface Properties {
 
   /** Called to move a scenario to a new position within its section. */
   onMoveScenario?: (layout: Layout, offset: number) => void;
+
+  /** Called to rename the section being edited. */
+  onRename?: (name: string) => void;
+
+  /** Called to change a scenario's condition. */
+  onCondition?: (layout: Layout, condition: string) => void;
+
+  /** Called to rename a box. */
+  onRenameBox?: (box: Box, name: string) => void;
 }
 
 /** Where the line marking a drop sits: how far down the tree, and how deep,
@@ -146,6 +158,8 @@ interface State {
   hovered: object;
   dragging: object;
   dropLine: DropLine;
+  renaming: Entry;
+  draft: string;
 }
 
 /** Lists a whole specification as a tree of sections, scenarios, layers and
@@ -155,7 +169,8 @@ export class OutlinePanel extends React.Component<Properties, State> {
   constructor(props: Properties) {
     super(props);
     this.state = {open: new Set<object>(), width: WIDTH, focus: -1,
-      hovered: null, dragging: null, dropLine: null};
+      hovered: null, dragging: null, dropLine: null,
+      renaming: null, draft: ''};
     this.grabbed = 0;
     this.held = 0;
     this.rows = [];
@@ -167,6 +182,9 @@ export class OutlinePanel extends React.Component<Properties, State> {
     this.dragActive = false;
     this.dragEntry = null;
     this.dropTarget = null;
+    this.suppressClick = false;
+    this.cancelling = false;
+    this.wasFocused = false;
   }
 
   public render(): JSX.Element {
@@ -229,6 +247,9 @@ export class OutlinePanel extends React.Component<Properties, State> {
   private dragActive: boolean;
   private dragEntry: Entry;
   private dropTarget: number;
+  private suppressClick: boolean;
+  private cancelling: boolean;
+  private wasFocused: boolean;
 
   /** Returns the rows on show, folded ones left out, in the order they are
       read down the panel. This is what the arrow keys walk. */
@@ -249,14 +270,11 @@ export class OutlinePanel extends React.Component<Properties, State> {
         leaf: scenarios.length === 0,
         open,
         draggable: true,
+        renamable: true,
         style: {...this.amissStyle(this.sectionFaults(component)),
           ...this.hoverStyle(component), ...this.editingStyle(component)},
         visit: () => this.props.onSection?.(component),
-        choose: () => {
-          const here = component === this.props.component;
-          this.props.onSection?.(component);
-          this.spread(OutlinePanel.under(component), !(here && open));
-        }
+        choose: () => this.props.onSection?.(component)
       });
       if(!open) {
         continue;
@@ -284,16 +302,12 @@ export class OutlinePanel extends React.Component<Properties, State> {
       leaf: layout.boxes.length === 0 && layout.overlays.length === 0,
       open,
       draggable: index !== 0,
+      renamable: index !== 0,
       style: {...this.amissStyle(
           this.frameFaults(component, layout.boxes)),
         ...this.hoverStyle(layout), ...this.markFor(layout.boxes)},
       visit: () => this.props.onActivate?.(component, layout.boxes),
-      choose: () => {
-        const here = component === this.props.component;
-        this.props.onActivate?.(component, layout.boxes);
-        this.spread([layout as object].concat(layout.overlays),
-          !(here && open));
-      }
+      choose: () => this.props.onActivate?.(component, layout.boxes)
     });
     if(!open) {
       return;
@@ -316,14 +330,11 @@ export class OutlinePanel extends React.Component<Properties, State> {
         leaf: overlay.length === 0,
         open: shown,
         draggable: false,
+        renamable: false,
         style: {...this.amissStyle(this.frameFaults(component, overlay)),
           ...this.hoverStyle(overlay), ...this.markFor(overlay)},
         visit: () => this.props.onActivate?.(component, overlay),
-        choose: () => {
-          const here = component === this.props.component;
-          this.props.onActivate?.(component, overlay);
-          this.spread([overlay], !(here && shown));
-        }
+        choose: () => this.props.onActivate?.(component, overlay)
       });
       if(!shown) {
         continue;
@@ -351,6 +362,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       leaf: true,
       open: false,
       draggable: false,
+      renamable: true,
       style: {...this.amissStyle(this.boxFaults(component, box)),
         ...(hovered ? OutlinePanel.STYLE.hovered : {}),
         ...(chosen ? OutlinePanel.STYLE.chosen : {})},
@@ -366,19 +378,46 @@ export class OutlinePanel extends React.Component<Properties, State> {
       }
       return -1;
     })();
-    const label = (
-      <button style={{...OutlinePanel.STYLE.label,
-          ...(entry.leaf ? {paddingLeft:
-            `${TWIST_WIDTH + GAP + entry.depth * INDENT}px`} : {})}}
-          tabIndex={reached} ref={element => this.rows[index] = element}
-          title={entry.title} onFocus={() => this.settle(index)}
-          onClick={() => {
-            this.settle(index);
-            entry.choose();
-          }}>
-        <span style={OutlinePanel.STYLE.name}>{entry.label}</span>
-        <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
-      </button>);
+    const indentation = (() => {
+      if(entry.leaf) {
+        return {paddingLeft:
+          `${TWIST_WIDTH + GAP + entry.depth * INDENT}px`};
+      }
+      return {};
+    })();
+    const label = (() => {
+      if(this.state.renaming?.node === entry.node) {
+        return (
+          <React.Fragment>
+            <input style={{...OutlinePanel.STYLE.renameInput,
+                ...indentation}} autoFocus ref={this.selectOnMount}
+                value={this.state.draft}
+                onMouseDown={event => event.stopPropagation()}
+                onChange={event => this.setState({draft: event.target.value})}
+                onKeyDown={event => {
+                  event.stopPropagation();
+                  if(event.key === 'Escape') {
+                    this.cancelRename();
+                  } else if(event.key === 'Enter') {
+                    this.submitRename();
+                  }
+                }}
+                onBlur={this.submitRename}/>
+            <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
+          </React.Fragment>);
+      }
+      return (
+        <button style={{...OutlinePanel.STYLE.label, ...indentation}}
+            tabIndex={reached} ref={element => this.rows[index] = element}
+            title={entry.title} onFocus={() => this.settle(index)}
+            onMouseDown={() => {
+              this.wasFocused = index === this.state.focus;
+            }}
+            onClick={() => this.activate(entry, index, this.wasFocused)}>
+          <span style={OutlinePanel.STYLE.name}>{entry.label}</span>
+          <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
+        </button>);
+    })();
     const hover = {
       onMouseEnter: () => {
         if(entry.box !== null) {
@@ -430,6 +469,83 @@ export class OutlinePanel extends React.Component<Properties, State> {
       </div>);
   }
 
+  /** Selects an input's text once, when it is first mounted, rather than
+      on every re-render — a fresh inline function passed as `ref` would
+      make React re-invoke it (and so re-select, clobbering whatever has
+      since been typed) on every keystroke. */
+  private selectOnMount = (element: HTMLInputElement) => {
+    element?.select();
+  }
+
+  /** Chooses a row, unless it was already the current one *before* this
+      press — the one thing that actually means "rename this" — in which
+      case a further press does that instead. `wasCurrent` is captured
+      before this row's focus changes as a side effect of the same press,
+      since a focus change always precedes the click/keydown that reports
+      it. Shared by a mouse click on the label (captured on its own
+      `mousedown`) and a `Space` press on an already-focused row. */
+  private activate(entry: Entry, index: number, wasCurrent: boolean): void {
+    this.settle(index);
+    if(this.suppressClick) {
+      this.suppressClick = false;
+      return;
+    }
+    if(wasCurrent && entry.renamable) {
+      this.cancelling = false;
+      this.setState({renaming: entry, draft: OutlinePanel.rawNameOf(entry)});
+      return;
+    }
+    entry.choose();
+  }
+
+  /** Returns the raw, editable text behind a row's displayed label. */
+  private static rawNameOf(entry: Entry): string {
+    if(entry.box !== null) {
+      return entry.box.name;
+    }
+    if(entry.depth === 1) {
+      return (entry.node as Layout).condition;
+    }
+    return entry.component.name;
+  }
+
+  private cancelRename(): void {
+    this.cancelling = true;
+    this.setState({renaming: null, draft: ''}, this.restoreFocus);
+  }
+
+  private submitRename = () => {
+    if(this.cancelling) {
+      this.cancelling = false;
+      return;
+    }
+    const entry = this.state.renaming;
+    if(entry === null) {
+      return;
+    }
+    if(entry.box !== null) {
+      this.props.onRenameBox?.(entry.box, this.state.draft);
+    } else if(entry.depth === 1) {
+      this.props.onCondition?.(entry.node as Layout, this.state.draft);
+    } else if(entry.depth === 0) {
+      this.props.onRename?.(this.state.draft);
+    }
+    this.setState({renaming: null, draft: ''}, this.restoreFocus);
+  }
+
+  /** Puts the keyboard focus back on the row that was renamed, its own
+      label button having just replaced the editor in the same spot —
+      unlike a plain re-render, swapping which element sits there does not
+      carry focus over on its own, so without this the row (and the tree
+      as a whole) would silently stop responding to the arrow keys until
+      something was clicked or tabbed to again. */
+  private restoreFocus = (): void => {
+    const row = this.rows[this.state.focus];
+    if(row !== undefined && row !== null) {
+      row.focus();
+    }
+  }
+
   /** Walks the tree by the arrow keys, the way a tree is walked anywhere
       else: down and up move a row at a time, right opens a row and then
       steps into it, left shuts it and then steps back out to what holds
@@ -474,9 +590,12 @@ export class OutlinePanel extends React.Component<Properties, State> {
       if(holder !== -1) {
         this.walk(entries, holder);
       }
-    } else if(event.key === 'Enter' || event.key === ' ') {
+    } else if(event.key === 'Enter') {
       event.preventDefault();
       entry.choose();
+    } else if(event.key === ' ') {
+      event.preventDefault();
+      this.activate(entry, at, at === this.state.focus);
     }
   }
 
@@ -552,6 +671,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
   }
 
   private onRowMouseDown = (event: React.MouseEvent, entry: Entry) => {
+    this.suppressClick = false;
     this.dragOrigin = {x: event.clientX, y: event.clientY};
     this.dragActive = false;
     this.dragEntry = entry;
@@ -574,8 +694,11 @@ export class OutlinePanel extends React.Component<Properties, State> {
   }
 
   private onRowMouseUp = () => {
-    if(this.dragActive && this.dropTarget !== null) {
-      this.commitDrop();
+    if(this.dragActive) {
+      this.suppressClick = true;
+      if(this.dropTarget !== null) {
+        this.commitDrop();
+      }
     }
     this.endDrag();
   }
@@ -681,19 +804,6 @@ export class OutlinePanel extends React.Component<Properties, State> {
     }
   }
 
-  /** Opens or shuts a set of nodes together. */
-  private spread(nodes: object[], open: boolean): void {
-    const next = new Set(this.state.open);
-    for(const node of nodes) {
-      if(open) {
-        next.add(node);
-      } else {
-        next.delete(node);
-      }
-    }
-    this.setState({open: next});
-  }
-
   private toggle(node: object): void {
     const open = new Set(this.state.open);
     if(open.has(node)) {
@@ -795,18 +905,6 @@ export class OutlinePanel extends React.Component<Properties, State> {
         {arrow !== '' &&
           <span style={{color: REPEAT_DIRECTION}}>{arrow}</span>}
       </React.Fragment>);
-  }
-
-  /** Returns everything a section holds that can be opened or shut. */
-  private static under(component: Component): object[] {
-    const nodes = [component as object];
-    for(const layout of OutlinePanel.scenariosOf(component)) {
-      nodes.push(layout);
-      for(const overlay of layout.overlays) {
-        nodes.push(overlay);
-      }
-    }
-    return nodes;
   }
 
   /** Returns the scenarios a section is made of, without the blank waiting
@@ -964,6 +1062,19 @@ export class OutlinePanel extends React.Component<Properties, State> {
       whiteSpace: 'nowrap' as 'nowrap',
       overflow: 'hidden' as 'hidden',
       textOverflow: 'ellipsis'
+    },
+    renameInput: {
+      flexGrow: 1,
+      minWidth: 0,
+      padding: '2px 4px',
+      border: 'none',
+      outline: '1px solid #684BC7',
+      outlineOffset: '-1px',
+      backgroundColor: '#FFFFFF',
+      color: '#000000',
+      fontFamily: 'inherit',
+      fontSize: '12px',
+      lineHeight: '18px'
     },
     note: {
       flexShrink: 0,

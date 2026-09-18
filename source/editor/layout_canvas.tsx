@@ -57,6 +57,10 @@ const GLYPH_SIZE = 13;
 /** How large the name inside a box is drawn. */
 const LABEL_SIZE = 12;
 
+/** How wide a box's inline name editor starts, in pixels of screen, before
+    it grows to fit whatever is typed into it. */
+const RENAME_WIDTH = 96;
+
 /** How large the arrow marking which way a box repeats is drawn. */
 const REPEAT_SIZE = 15;
 
@@ -176,6 +180,9 @@ interface Properties {
 
   /** Called when the selected box is deleted from the canvas. */
   onRemove?: () => void;
+
+  /** Called to rename a box. */
+  onRenameBox?: (box: Box, name: string) => void;
 }
 
 interface State {
@@ -185,6 +192,9 @@ interface State {
   handle: Handle;
   guides: Guide[];
   aligned: Box[];
+  renaming: Box;
+  draft: string;
+  editorWidth: number;
 }
 
 /** Displays a layout, letting boxes be drawn into it and moved around it. */
@@ -197,7 +207,10 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       current: null,
       handle: null,
       guides: [],
-      aligned: []
+      aligned: [],
+      renaming: null,
+      draft: '',
+      editorWidth: RENAME_WIDTH
     };
     this.held = [];
     this.active = false;
@@ -205,6 +218,10 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     this.count = 0;
     this.extend = false;
     this.pointer = null;
+    this.cancelling = false;
+    this.focused = null;
+    this.renameArmed = false;
+    this.ownSelect = false;
   }
 
   public render(): JSX.Element {
@@ -233,7 +250,12 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     this.show();
   }
 
-  public componentDidUpdate(): void {
+  public componentDidUpdate(previous: Properties): void {
+    if(this.ownSelect) {
+      this.ownSelect = false;
+    } else if(previous.selection !== this.props.selection) {
+      this.focused = null;
+    }
     this.show();
     if(this.state.gesture !== Gesture.NONE || this.pointer === null ||
         this.container === null) {
@@ -259,7 +281,22 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   private identifiers: WeakMap<Box, string>;
   private count: number;
   private extend: boolean;
-  private origin: Point;
+  private cancelling: boolean;
+
+  /** This canvas's own notion of "focus": the box a click here last made
+      the current selection, as opposed to the selection arriving some
+      other way, such as through the outline panel. `componentDidUpdate` clears it
+      whenever the selection changes for any reason other than this
+      canvas's own `select()` call. */
+  private focused: Box;
+
+  private renameArmed: boolean;
+
+  /** Set just before calling `onSelect`, and read (then cleared) by
+      `componentDidUpdate` — marks a selection change as this canvas's own
+      doing, so it knows not to treat it as the box losing focus (see
+      `focused`). */
+  private ownSelect: boolean;
 
   /** Scrolls a box asked for into view, once for each time it is asked
       for. Every canvas is asked, and the one holding the box answers. */
@@ -332,14 +369,68 @@ export class LayoutCanvas extends React.Component<Properties, State> {
             width: `${box.width}px`, height: `${box.height}px`,
             ...this.paintFor(box, marked, hovered), ...selection,
             ...alignment, ...LayoutCanvas.cursorFor(this.state.handle)}}>
-        {label !== '' &&
-          <span style={{...LayoutCanvas.STYLE.label,
-            ...LayoutCanvas.inkFor(box),
-            fontSize: `${this.local(LABEL_SIZE)}px`}}>{label}</span>}
+        {this.state.renaming === box ?
+          <input style={{...LayoutCanvas.STYLE.renameInput,
+              fontSize: `${this.local(LABEL_SIZE)}px`,
+              padding: `0 ${this.local(4)}px`,
+              outlineWidth: `${this.local(1)}px`,
+              outlineOffset: `-${this.local(1)}px`,
+              width: `${this.local(this.state.editorWidth)}px`}}
+              autoFocus ref={this.selectOnMount}
+              value={this.state.draft}
+              onMouseDown={event => event.stopPropagation()}
+              onChange={event => this.onRenameChange(event.target)}
+              onKeyDown={event => {
+                event.stopPropagation();
+                if(event.key === 'Escape') {
+                  this.cancelRename();
+                } else if(event.key === 'Enter') {
+                  this.submitRename();
+                }
+              }}
+              onBlur={this.submitRename}/> :
+          label !== '' &&
+            <span data-box-label='' style={{...LayoutCanvas.STYLE.label,
+              ...LayoutCanvas.inkFor(box),
+              fontSize: `${this.local(LABEL_SIZE)}px`}}>{label}</span>}
         {this.renderRepeat(box)}
         {this.renderDelete(box)}
       </div>);
   }
+
+  /** Selects an input's text once, when it is first mounted, rather than
+      on every re-render — a fresh inline function passed as `ref` would
+      make React re-invoke it (and so re-select, clobbering whatever has
+      since been typed) on every keystroke. */
+  private selectOnMount = (element: HTMLInputElement) => {
+    element?.select();
+  }
+
+  /** Grows the editor to fit what has been typed, never shrinking below
+      `RENAME_WIDTH`. `editorWidth` is in pixels of screen (unlike most
+      sizes here, which are pixels of layout) — `local()` is applied once,
+      at the point the width is actually rendered. The text itself is
+      measured rather than read from the field's own `scrollWidth`, which
+      reflects the field's current (already-grown) box once nothing
+      overflows it, not the natural width of what's typed — relying on it
+      would ratchet the box wider by the same amount on every keystroke,
+      however short the name. */
+  private onRenameChange(field: HTMLInputElement): void {
+    const width = LayoutCanvas.measure(field.value,
+      `700 ${LABEL_SIZE}px Roboto, Segoe UI, sans-serif`);
+    const grown = Math.max(RENAME_WIDTH, width + 8);
+    this.setState({draft: field.value, editorWidth: grown});
+  }
+
+  /** Returns how wide a string renders in a given font, in pixels of
+      screen, independent of any element's own current box size. */
+  private static measure(text: string, font: string): number {
+    const context = LayoutCanvas.measurer.getContext('2d');
+    context.font = font;
+    return context.measureText(text).width;
+  }
+
+  private static readonly measurer = document.createElement('canvas');
 
   /** Marks which way a repeating box repeats with an arrow on the edge it
       runs from, the direction being nothing the box's own shape can say. */
@@ -590,7 +681,6 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     const point = this.pointOf(event);
     this.extend = event.shiftKey;
     this.active = false;
-    this.origin = point;
     event.preventDefault();
     this.attach();
     const grasp = (() => {
@@ -603,7 +693,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       this.hold(grasp.boxes);
       if(grasp.boxes.length === 1 &&
           this.props.selection.indexOf(grasp.boxes[0]) === -1) {
-        this.props.onSelect?.(grasp.boxes, false, this.props.boxes);
+        this.select(grasp.boxes, false);
       }
       this.setState({gesture: Gesture.RESIZE, handle: grasp.handle,
         origin: point, current: point});
@@ -611,12 +701,22 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     }
     const picked = boxAt(this.props.boxes, point.x, point.y);
     if(picked === null) {
+      this.focused = null;
       this.hold([]);
       this.setState({gesture: Gesture.DRAW, handle: null, origin: point,
         current: point});
       return;
     }
     const taken = this.props.selection.indexOf(picked) !== -1;
+    const sole = taken && this.props.selection.length === 1;
+    const doubleClicked = event.detail >= 2;
+    const labelHit = (event.target as Element).closest?.(
+      '[data-box-label]') != null;
+    // A box can be renamed by a real double-click anywhere on it, or by a
+    // single click on its own label once it is focused — see `focused`.
+    this.renameArmed = sole &&
+      (doubleClicked || (labelHit && picked === this.focused));
+    this.focused = picked;
     const moving = (() => {
       if(this.extend || !taken) {
         return [picked];
@@ -625,7 +725,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     })();
     this.hold(moving);
     if(!this.extend && !taken) {
-      this.props.onSelect?.([picked], false, this.props.boxes);
+      this.select([picked], false);
     }
     this.setState({gesture: Gesture.DRAG, handle: null, origin: point,
       current: point});
@@ -809,13 +909,19 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     if(!active) {
       if(gesture !== Gesture.RESIZE) {
         const picked = boxAt(this.props.boxes, origin.x, origin.y);
+        if(!this.extend && picked !== null && this.renameArmed) {
+          this.cancelling = false;
+          this.setState({renaming: picked, draft: picked.name,
+            editorWidth: RENAME_WIDTH});
+          return;
+        }
         const chosen = (() => {
           if(picked === null) {
             return [];
           }
           return [picked];
         })();
-        this.props.onSelect?.(chosen, this.extend, this.props.boxes);
+        this.select(chosen, this.extend);
       }
       return;
     }
@@ -825,8 +931,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     }
     const box = this.build(region);
     this.props.boxes.push(box);
-    this.props.onSelect?.([box], false, this.props.boxes);
+    this.select([box], false);
     this.props.onCommit?.();
+  }
+
+  /** Calls `onSelect`, marking the selection change it causes as this
+      canvas's own doing (see `ownSelect`). */
+  private select(boxes: Box[], extend: boolean): void {
+    this.ownSelect = true;
+    this.props.onSelect?.(boxes, extend, this.props.boxes);
   }
 
   /** Returns a box covering a drawn rectangle, clipped to the canvas so
@@ -941,6 +1054,24 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     if(!known) {
       guides.push({vertical, offset, from, to});
     }
+  }
+
+  private cancelRename(): void {
+    this.cancelling = true;
+    this.setState({renaming: null, draft: ''});
+  }
+
+  private submitRename = () => {
+    if(this.cancelling) {
+      this.cancelling = false;
+      return;
+    }
+    const box = this.state.renaming;
+    if(box === null) {
+      return;
+    }
+    this.props.onRenameBox?.(box, this.state.draft);
+    this.setState({renaming: null, draft: ''});
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
@@ -1128,6 +1259,19 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       fontWeight: 700,
       whiteSpace: 'nowrap' as 'nowrap',
       overflow: 'hidden' as 'hidden'
+    },
+    renameInput: {
+      boxSizing: 'border-box' as 'border-box',
+      textAlign: 'center' as 'center',
+      fontWeight: 700,
+      fontFamily: 'inherit',
+      border: 'none',
+      outlineStyle: 'solid' as 'solid',
+      outlineColor: '#684BC7',
+      outlineOffset: '-1px',
+      backgroundColor: '#FFFFFF',
+      color: '#000000',
+      cursor: 'text'
     },
     rubberBand: {
       position: 'absolute' as 'absolute',
