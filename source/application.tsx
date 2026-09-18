@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Clipboard, copyBoxes, copyOf, copyScenario, ensureBlank,
-  ErrorPanel, History, keepsSelection, makeBlank, NodeProperties,
-  OutlinePanel, prune, push, restoreSnapshot, Reveal, ScenarioBoard,
-  Problem, SectionPicker, Snapshot, takeSnapshot,
+  ErrorPanel, History, keepsSelection, makeBlank, MINIMUM_SIZE,
+  NodeProperties, OutlinePanel, prune, push, restoreSnapshot, Reveal,
+  ScenarioBoard, Problem, SectionPicker, Snapshot, takeSnapshot,
   validateBoard } from './editor';
 import { Board, Box, Component, Layout } from './layout';
 import { importFlatBoard, isFlatBoard } from './migration';
@@ -10,6 +10,12 @@ import { SpecificationFile } from './storage';
 
 /** The magnifications a canvas steps through, in ascending order. */
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4, 6, 8, 10];
+
+/** How far an arrow key nudges the selection, in pixels. */
+const NUDGE_AMOUNT = 1;
+
+/** How far Shift+arrow nudges the selection, in pixels. */
+const BIG_NUDGE_AMOUNT = 8;
 
 interface State {
   file: SpecificationFile;
@@ -178,7 +184,7 @@ export class Application extends React.Component<{}, State> {
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
-    if(Application.isTyping()) {
+    if(event.defaultPrevented || Application.isTyping()) {
       return;
     }
     if(event.ctrlKey || event.metaKey) {
@@ -211,6 +217,11 @@ export class Application extends React.Component<{}, State> {
       } else if(event.key === 's' || event.key === 'S') {
         event.preventDefault();
         this.onSave();
+      } else if(Application.isArrow(event.key) &&
+          this.state.selection.length > 0) {
+        event.preventDefault();
+        this.onResizeNudge(event.key,
+          event.shiftKey ? BIG_NUDGE_AMOUNT : NUDGE_AMOUNT);
       }
       return;
     }
@@ -222,11 +233,65 @@ export class Application extends React.Component<{}, State> {
       this.setState({selection: [], active: null});
       return;
     }
+    if(Application.isArrow(event.key)) {
+      event.preventDefault();
+      this.onMoveNudge(event.key,
+        event.shiftKey ? BIG_NUDGE_AMOUNT : NUDGE_AMOUNT);
+      return;
+    }
     if(event.key !== 'Delete' && event.key !== 'Backspace') {
       return;
     }
     event.preventDefault();
     this.onRemove();
+  }
+
+  /** Moves the selection by an arrow key, holding it off the canvas's
+      fixed top-left origin the same way a mouse drag does. */
+  private onMoveNudge = (key: string, amount: number): void => {
+    const dx = (() => {
+      if(key === 'ArrowRight') { return amount; }
+      if(key === 'ArrowLeft') { return -amount; }
+      return 0;
+    })();
+    const dy = (() => {
+      if(key === 'ArrowDown') { return amount; }
+      if(key === 'ArrowUp') { return -amount; }
+      return 0;
+    })();
+    const across = Math.max(dx,
+      -Math.min(...this.state.selection.map(box => box.x)));
+    const down = Math.max(dy,
+      -Math.min(...this.state.selection.map(box => box.y)));
+    for(const box of this.state.selection) {
+      box.x += across;
+      box.y += down;
+    }
+    this.commit({}, dx !== 0 ? 'nudge-x' : 'nudge-y');
+  }
+
+  /** Resizes the selection by an arrow key, the top-left corner always
+      held fixed -- growing (right/down) or shrinking (left/up) only ever
+      changes width or height, never position. */
+  private onResizeNudge = (key: string, amount: number): void => {
+    for(const box of this.state.selection) {
+      if(key === 'ArrowRight') {
+        box.width = Math.max(box.width + amount, MINIMUM_SIZE);
+      } else if(key === 'ArrowLeft') {
+        box.width = Math.max(box.width - amount, MINIMUM_SIZE);
+      } else if(key === 'ArrowDown') {
+        box.height = Math.max(box.height + amount, MINIMUM_SIZE);
+      } else if(key === 'ArrowUp') {
+        box.height = Math.max(box.height - amount, MINIMUM_SIZE);
+      }
+    }
+    const horizontal = key === 'ArrowRight' || key === 'ArrowLeft';
+    this.commit({}, horizontal ? 'resize-width' : 'resize-height');
+  }
+
+  private static isArrow(key: string): boolean {
+    return key === 'ArrowUp' || key === 'ArrowDown' ||
+      key === 'ArrowLeft' || key === 'ArrowRight';
   }
 
   private static isTyping(): boolean {

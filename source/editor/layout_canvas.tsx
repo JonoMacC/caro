@@ -14,7 +14,7 @@ const DRAG_THRESHOLD = 4;
 const FILL_RATIO = 0.8;
 
 /** The smallest a box may be resized to. */
-const MINIMUM_SIZE = 1;
+export const MINIMUM_SIZE = 1;
 
 /** How thick a box's policy edges are painted, in pixels of screen. */
 const EDGE = 3;

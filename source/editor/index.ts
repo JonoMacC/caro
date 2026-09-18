@@ -3,7 +3,7 @@ export { Clipboard, copyBoxes, copyScenario } from './clipboard';
 export { ErrorPanel } from './error_panel';
 export { History, Place, restoreSnapshot, Snapshot,
   takeSnapshot } from './history';
-export { LayoutCanvas, Reveal } from './layout_canvas';
+export { LayoutCanvas, MINIMUM_SIZE, Reveal } from './layout_canvas';
 export { OutlinePanel } from './outline_panel';
 export { NodeProperties } from './node_properties';
 export { directionsFor, Edge, repeats, runsFrom, setHeightPolicy,
