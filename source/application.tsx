@@ -62,7 +62,9 @@ export class Application extends React.Component<{}, State> {
             selection={this.state.selection} hovered={this.state.hovered}
             problems={problems}
             onSection={this.onSelectSection} onActivate={this.onActivate}
-            onReveal={this.onReveal} onHover={this.onHover}/>}
+            onReveal={this.onReveal} onHover={this.onHover}
+            onMoveSection={this.onMoveSection}
+            onMoveScenario={this.onMoveScenario}/>}
         <div style={Application.STYLE.content}>
           {this.renderToolbar()}
           {this.renderBody()}
@@ -404,6 +406,18 @@ export class Application extends React.Component<{}, State> {
     layouts.splice(index, 1);
     layouts.splice(target, 0, layout);
     this.commit({status: 'Moved a scenario.'}, null);
+  }
+
+  private onMoveSection = (component: Component, offset: number) => {
+    const components = this.state.board.components;
+    const index = components.indexOf(component);
+    const target = index + offset;
+    if(target < 0 || target >= components.length) {
+      return;
+    }
+    components.splice(index, 1);
+    components.splice(target, 0, component);
+    this.commit({status: 'Moved a section.'}, null);
   }
 
   private onAddSection = () => {
