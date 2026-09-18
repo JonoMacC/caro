@@ -706,6 +706,7 @@ export class Application extends React.Component<{}, State> {
       backgroundColor: '#FFFFFF'
     },
     control: {
+      flexShrink: 0,
       width: '28px',
       height: '28px',
       padding: 0,
@@ -731,6 +732,7 @@ export class Application extends React.Component<{}, State> {
       cursor: 'pointer'
     },
     button: {
+      flexShrink: 0,
       padding: '8px 12px',
       fontSize: '13px',
       cursor: 'pointer'
