@@ -199,6 +199,18 @@ export class Application extends React.Component<{}, State> {
       } else if(event.key === 'd' || event.key === 'D') {
         event.preventDefault();
         this.onDuplicate(event);
+      } else if(event.key === 'n' || event.key === 'N') {
+        // Cmd+N still opens a new browser window on macOS: Chrome treats
+        // it as a reserved shortcut no page can intercept, preventDefault
+        // or not. Ctrl+N is unreserved there and works as expected.
+        event.preventDefault();
+        this.onNew();
+      } else if(event.key === 'o' || event.key === 'O') {
+        event.preventDefault();
+        this.onOpen();
+      } else if(event.key === 's' || event.key === 'S') {
+        event.preventDefault();
+        this.onSave();
       }
       return;
     }
