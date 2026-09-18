@@ -74,6 +74,11 @@ interface Properties {
   /** Called to rename a box. */
   onRenameBox?: (box: Box, name: string) => void;
 
+  /** Called to move one of a scenario's layers up or down, offset -1 or
+      1; layer 0 moving up (offset -1) promotes it into the base layout
+      itself, swapping content with whatever was there. */
+  onMoveLayer?: (layout: Layout, layer: number, offset: number) => void;
+
 }
 
 /** Displays every scenario of a component side by side. */
@@ -176,6 +181,15 @@ export class ScenarioBoard extends React.Component<Properties> {
       <div key={`layer-${layer}`} style={ScenarioBoard.STYLE.layer}>
         <div style={ScenarioBoard.STYLE.caption}>
           <span style={ScenarioBoard.STYLE.name}>{`Layer ${layer + 1}`}</span>
+          <button style={ScenarioBoard.STYLE.control} title='Move layer up'
+              onClick={() => this.props.onMoveLayer?.(layout, layer, -1)}>
+            {'\u2191'}
+          </button>
+          <button style={ScenarioBoard.STYLE.control} title='Move layer down'
+              disabled={layer >= layout.overlays.length - 1}
+              onClick={() => this.props.onMoveLayer?.(layout, layer, 1)}>
+            {'\u2193'}
+          </button>
           <button style={ScenarioBoard.STYLE.control} title='Delete layer'
               onClick={() => this.props.onRemoveLayer?.(layout, layer)}>
             {'\u00D7'}

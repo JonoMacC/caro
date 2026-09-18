@@ -417,7 +417,8 @@ export class Application extends React.Component<{}, State> {
           onProperties={this.onProperties} zoom={this.state.zoom}
           onZoom={this.onZoom} onAddLayer={this.onAddLayer}
           onRemoveLayer={this.onRemoveLayer}
-          onRenameBox={this.onRenameBox}/>);
+          onRenameBox={this.onRenameBox}
+          onMoveLayer={this.onMoveLayer}/>);
     }
     return (
       <div style={Application.STYLE.placeholder}>
@@ -789,6 +790,32 @@ export class Application extends React.Component<{}, State> {
       active: null,
       status: 'Removed a layer.'
     }, null);
+  }
+
+  /** Swaps a layer's content with the one above or below it, offset -1
+      or 1; layer 0 moving up (offset -1) swaps with the base layout
+      itself, since it isn't an element of the overlays array. Contents
+      are swapped in place rather than the arrays being reordered or
+      reassigned, so which panel is active stays with the panel, not
+      with whatever is drawn in it. */
+  private onMoveLayer = (layout: Layout, layer: number,
+      offset: number): void => {
+    const target = layer + offset;
+    if(target < -1 || target >= layout.overlays.length) {
+      return;
+    }
+    const targetArray = (() => {
+      if(target === -1) {
+        return layout.boxes;
+      }
+      return layout.overlays[target];
+    })();
+    const layerArray = layout.overlays[layer];
+    const layerContent = layerArray.slice();
+    const targetContent = targetArray.slice();
+    layerArray.splice(0, layerArray.length, ...targetContent);
+    targetArray.splice(0, targetArray.length, ...layerContent);
+    this.commit({status: 'Moved a layer.'}, null);
   }
 
   private onRemove = () => {

@@ -86,6 +86,13 @@ async function main() {
     }
     await pause(350);
   };
+  const undo = async () => {
+    for(const type of ['keyDown', 'keyUp']) {
+      await send('Input.dispatchKeyEvent', {type, key: 'z', code: 'KeyZ',
+        windowsVirtualKeyCode: 90, nativeVirtualKeyCode: 90, modifiers: 2});
+    }
+    await pause(350);
+  };
   const click = label => evaluate(
     `Array.from(document.querySelectorAll('button'))
       .find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`);
@@ -218,6 +225,56 @@ async function main() {
     [0].click()`);
   await pause(400);
   check('removing one renumbers the rest', await captions(), ['Layer 1']);
+
+  // Layer reordering: promoting a layer swaps its content with the
+  // base rather than becoming a new element of the overlays array.
+  where = await rectOf(1);
+  await drag({x: where.left + 20, y: where.top + 20},
+    {x: where.left + 90, y: where.top + 45});
+  const dims = () => evaluate(`(() => {
+    return Array.from(document.querySelectorAll('[data-canvas]'))
+      .map(c => Array.from(c.children)
+        .filter(x => x.style.boxShadow.indexOf('inset') !== -1)
+        .map(b => parseInt(b.style.width) + 'x' + parseInt(b.style.height)));
+  })()`);
+  check('the base layout has no move buttons of its own',
+    await evaluate(`document.querySelectorAll(
+      '[title="Move layer up"]').length`), 1);
+  let before = await dims();
+  check('the base and the layer start out different', before[0][0] ===
+    before[1][0], false);
+  await evaluate(`document.querySelector(
+    '[title="Move layer up"]').click()`);
+  await pause(400);
+  let after = await dims();
+  check('moving the layer up swaps its content with the base',
+    [after[0], after[1]], [before[1], before[0]]);
+  await undo();
+  check('undoing the move swaps them back', await dims(), before);
+
+  await click('Add a layer');
+  await pause(400);
+  where = await rectOf(2);
+  await drag({x: where.left + 20, y: where.top + 20},
+    {x: where.left + 60, y: where.top + 30});
+  before = await dims();
+  check('the last layer has no way to move further down',
+    await evaluate(`Array.from(document.querySelectorAll(
+      '[title="Move layer down"]')).map(b => b.disabled)`),
+    [false, true]);
+  await evaluate(`Array.from(document.querySelectorAll(
+    '[title="Move layer up"]'))[1].click()`);
+  await pause(400);
+  after = await dims();
+  check('moving the second layer up swaps it with the first, ' +
+    'not the base', [after[0], after[1], after[2]],
+    [before[0], before[2], before[1]]);
+
+  // Back to a single layer, so the save/open checks below see what
+  // they already expect.
+  await evaluate(`Array.from(document.querySelectorAll(
+    '[title="Delete layer"]'))[1].click()`);
+  await pause(400);
 
   await click('Save');
   await pause(900);
