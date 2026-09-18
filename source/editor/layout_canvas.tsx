@@ -624,9 +624,11 @@ export class LayoutCanvas extends React.Component<Properties, State> {
           MINIMUM_SIZE);
       }
       if(handle.left && held.x <= region.x + 1) {
-        const width = Math.max(Math.round(held.width - across), MINIMUM_SIZE);
-        held.box.x = Math.max(Math.round(held.x + held.width - width), 0);
-        held.box.width = width;
+        const rightEdge = held.x + held.width;
+        const x = Math.min(Math.max(Math.round(held.x + across), 0),
+          rightEdge - MINIMUM_SIZE);
+        held.box.x = x;
+        held.box.width = rightEdge - x;
       }
       if(handle.bottom &&
           held.y + held.height >= region.y + region.height - 1) {
@@ -634,9 +636,11 @@ export class LayoutCanvas extends React.Component<Properties, State> {
           MINIMUM_SIZE);
       }
       if(handle.top && held.y <= region.y + 1) {
-        const height = Math.max(Math.round(held.height - down), MINIMUM_SIZE);
-        held.box.y = Math.max(Math.round(held.y + held.height - height), 0);
-        held.box.height = height;
+        const bottomEdge = held.y + held.height;
+        const y = Math.min(Math.max(Math.round(held.y + down), 0),
+          bottomEdge - MINIMUM_SIZE);
+        held.box.y = y;
+        held.box.height = bottomEdge - y;
       }
     }
     this.props.onChange?.();
