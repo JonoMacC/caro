@@ -81,7 +81,8 @@ async function main() {
       document.querySelectorAll('input[type="number"]')).map(i => i.value);
     const chosen = Array.from(document.querySelectorAll('button'))
       .filter(b => b.style.fontWeight === '700').map(b => b.textContent.trim());
-    return {width: Math.round(r.width), height: Math.round(r.height),
+    return {left: Math.round(r.left), top: Math.round(r.top),
+      width: Math.round(r.width), height: Math.round(r.height),
       model: fields, policy: chosen, flex: box.style.flex};
   })()`);
   const reset = async () => {
@@ -144,6 +145,25 @@ async function main() {
   c = await canvas();
   check('the section grew down to hold it', c.height >= 510, true);
   console.log(`     canvas is now ${c.width}x${c.height}`);
+
+  // A box drawn past the left or top edge is clipped to the canvas
+  // instead of created outside it -- the edge dragged past the origin
+  // is trimmed, the edge pressed inside the canvas is left where drawn.
+  c = await reset();
+  await drag({x: c.left + 51, y: c.top + 20}, {x: c.left - 39, y: c.top + 70});
+  report = await last();
+  check('a box dragged past the left edge is not created outside the canvas',
+    report.left >= c.left, true);
+  check('it keeps the width from where the drag started to that edge',
+    report.width, 50);
+
+  c = await reset();
+  await drag({x: c.left + 20, y: c.top + 51}, {x: c.left + 70, y: c.top - 39});
+  report = await last();
+  check('a box dragged past the top edge is not created outside the canvas',
+    report.top >= c.top, true);
+  check('it keeps the height from where the drag started to that edge',
+    report.height, 50);
 
   console.log(failures === 0 ? '\noversized draws keep their size' :
     `\n${failures} FAILURES`);
