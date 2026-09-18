@@ -66,14 +66,14 @@ async function main(){
     ['<A>@20,10', '<B>@250,120']);
 
   // carry A onto B: nothing gets out of its way
-  await drag(at(120, 35), at(300, 150));
+  await drag(at(120, 35), at(300, 165));
   drawn = await boxes();
   console.log('   after the drop: ' + drawn.map(b =>
     b.name + ' ' + b.width + 'x' + b.height + '@' + b.x + ',' + b.y).join('  '));
   const a = drawn.find(b => b.name === '<A>');
   const b = drawn.find(b => b.name === '<B>');
   check('the carried box went where it was dropped',
-    [a.x, a.y], [200, 125]);
+    [a.x, a.y], [200, 140]);
   check('and the box it landed on stayed where it was',
     [b.x, b.y], [250, 120]);
   // a converted specification opens and draws where it was drawn

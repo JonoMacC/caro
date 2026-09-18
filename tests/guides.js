@@ -207,6 +207,75 @@ async function main() {
   await new Promise(r => setTimeout(r, 150));
   check('guides clear after the drop', (await evaluate(GUIDES)).length, 0);
 
+  // Real magnetism: within reach of another edge, a drop is pulled the
+  // rest of the way there rather than left where it landed.
+  const RECTS = `(() => {
+    const out = [];
+    const walk = e => { for(const c of e.children) {
+      if(c.style.boxShadow.indexOf('inset') !== -1) {
+        const s = c.querySelector('span');
+        const r = c.getBoundingClientRect();
+        out.push({name: s ? s.textContent : '', left: Math.round(r.left),
+          right: Math.round(r.right), top: Math.round(r.top),
+          bottom: Math.round(r.bottom),
+          x: Math.round(r.left + r.width / 2),
+          y: Math.round(r.top + r.height / 2)});
+      } else if(c.children.length) walk(c); } };
+    walk(document.querySelector('[data-canvas]'));
+    return out;
+  })()`;
+  const fresh = async () => {
+    await evaluate(`Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.trim() === 'New').click()`);
+    await new Promise(r => setTimeout(r, 400));
+  };
+  const dragBy = async (moving, dx) => {
+    await mouse('mousePressed', moving.x, moving.y);
+    await mouse('mouseMoved', moving.x + dx, moving.y, 1);
+    await mouse('mouseReleased', moving.x + dx, moving.y);
+    await new Promise(r => setTimeout(r, 150));
+  };
+  const named = (list, label) => list.find(r => r.name === label);
+
+  // Dropped 3 screen pixels short of an exact match -- close enough.
+  await fresh();
+  await draw(20, 300, 220, 400, 'C');
+  await draw(260, 300, 460, 400, 'D');
+  let boxes = await evaluate(RECTS);
+  await dragBy(named(boxes, '<C>'),
+    named(boxes, '<D>').left - named(boxes, '<C>').right - 3);
+  boxes = await evaluate(RECTS);
+  check('dropping within reach snaps the edge exactly to its target',
+    named(boxes, '<C>').right, named(boxes, '<D>').left);
+
+  // Dropped 10 screen pixels short -- too far to snap.
+  await fresh();
+  await draw(20, 300, 220, 400, 'C');
+  await draw(260, 300, 460, 400, 'D');
+  boxes = await evaluate(RECTS);
+  await dragBy(named(boxes, '<C>'),
+    named(boxes, '<D>').left - named(boxes, '<C>').right - 10);
+  boxes = await evaluate(RECTS);
+  check('dropping too far away is left where it landed',
+    named(boxes, '<D>').left - named(boxes, '<C>').right, 10);
+
+  // The same closeness, in screen pixels, snaps the same way at 200%.
+  await fresh();
+  await evaluate(`Array.from(document.querySelectorAll('button'))
+    .find(b => b.title === 'Zoom in').click()`);
+  await new Promise(r => setTimeout(r, 300));
+  await evaluate(`Array.from(document.querySelectorAll('button'))
+    .find(b => b.title === 'Zoom in').click()`);
+  await new Promise(r => setTimeout(r, 400));
+  await draw(20, 300, 220, 400, 'C');
+  await draw(300, 300, 500, 400, 'D');
+  boxes = await evaluate(RECTS);
+  await dragBy(named(boxes, '<C>'),
+    named(boxes, '<D>').left - named(boxes, '<C>').right - 3);
+  boxes = await evaluate(RECTS);
+  check('the same few screen pixels still snap when zoomed in',
+    named(boxes, '<C>').right, named(boxes, '<D>').left);
+
   console.log(failures === 0 ? '\nalignment guides work' :
     `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
