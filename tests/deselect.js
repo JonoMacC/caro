@@ -100,6 +100,7 @@ async function main() {
     };
     window.__box = label => window.__centre(
       Array.from(document.querySelectorAll('span'))
+        .filter(s => s.closest('[data-outline]') === null)
         .find(s => s.textContent.trim() === label).parentElement);
     window.__probe = () => {
       const name = document.querySelector('input[placeholder="Element:Name"]');

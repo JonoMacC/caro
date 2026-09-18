@@ -132,6 +132,7 @@ async function main() {
   })()`);
   const captions = () => evaluate(
     `Array.from(document.querySelectorAll('span'))
+      .filter(s => s.closest('[data-outline]') === null)
       .map(s => s.textContent.trim()).filter(t => /^Layer \\d+$/.test(t))`);
   const adders = () => evaluate(
     `Array.from(document.querySelectorAll('button'))

@@ -9,6 +9,15 @@ import { Problem, Severity } from './validation';
 /** How far each level of the tree is indented, in pixels. */
 const INDENT = 12;
 
+/** How wide the twisty is at the top level, before any indentation is
+    added to it. */
+const TWIST_WIDTH = 14;
+
+/** How much room sits between the twisty and the name it opens or shuts,
+    matched by a leaf row's own indent so its name lines up with one that
+    has a twisty at the same depth. */
+const GAP = 2;
+
 /** How wide the panel is to begin with, in pixels. */
 const WIDTH = 210;
 
@@ -283,38 +292,40 @@ export class OutlinePanel extends React.Component<Properties, State> {
   }
 
   private renderRow = (entry: Entry, index: number) => {
-    const twist = (() => {
-      if(entry.leaf) {
-        return '';
-      }
-      if(entry.open) {
-        return '\u25BE';
-      }
-      return '\u25B8';
-    })();
     const reached = (() => {
       if(index === Math.max(this.state.focus, 0)) {
         return 0;
       }
       return -1;
     })();
+    const label = (
+      <button style={{...OutlinePanel.STYLE.label,
+          ...(entry.leaf ? {paddingLeft:
+            `${TWIST_WIDTH + GAP + entry.depth * INDENT}px`} : {})}}
+          tabIndex={reached} ref={element => this.rows[index] = element}
+          title={entry.title} onFocus={() => this.settle(index)}
+          onClick={() => {
+            this.settle(index);
+            entry.choose();
+          }}>
+        <span style={OutlinePanel.STYLE.name}>{entry.label}</span>
+        <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
+      </button>);
+    if(entry.leaf) {
+      return (
+        <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style}}>
+          {label}
+        </div>);
+    }
+    const twist = entry.open ? '\u25BE' : '\u25B8';
     return (
-      <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style,
-          paddingLeft: `${entry.depth * INDENT}px`}}>
-        <button style={OutlinePanel.STYLE.twist} tabIndex={-1}
+      <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style}}>
+        <button style={{...OutlinePanel.STYLE.twist,
+            width: `${TWIST_WIDTH + entry.depth * INDENT}px`}} tabIndex={-1}
             onClick={() => this.toggle(entry.node)} title='Fold'>
           {twist}
         </button>
-        <button style={OutlinePanel.STYLE.label} tabIndex={reached}
-            ref={element => this.rows[index] = element}
-            title={entry.title} onFocus={() => this.settle(index)}
-            onClick={() => {
-              this.settle(index);
-              entry.choose();
-            }}>
-          {entry.label}
-        </button>
-        <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
+        {label}
       </div>);
   }
 
@@ -608,8 +619,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
     row: {
       display: 'flex',
       alignItems: 'center',
-      gap: '2px',
-      paddingRight: '8px'
+      gap: `${GAP}px`
     },
     amiss: {
       color: PROBLEM_COLOR
@@ -628,8 +638,10 @@ export class OutlinePanel extends React.Component<Properties, State> {
       color: '#FFFFFF'
     },
     twist: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
       flexShrink: 0,
-      width: '14px',
       padding: 0,
       border: 'none',
       backgroundColor: 'transparent',
@@ -639,20 +651,27 @@ export class OutlinePanel extends React.Component<Properties, State> {
       cursor: 'pointer'
     },
     label: {
+      display: 'flex',
+      alignItems: 'center',
       flexGrow: 1,
       minWidth: 0,
       padding: '2px 0',
+      paddingRight: '8px',
       border: 'none',
       backgroundColor: 'transparent',
       color: 'inherit',
       fontFamily: 'inherit',
       fontSize: '12px',
       lineHeight: '18px',
+      cursor: 'pointer'
+    },
+    name: {
+      flexGrow: 1,
+      minWidth: 0,
       textAlign: 'left' as 'left',
       whiteSpace: 'nowrap' as 'nowrap',
       overflow: 'hidden' as 'hidden',
-      textOverflow: 'ellipsis',
-      cursor: 'pointer'
+      textOverflow: 'ellipsis'
     },
     note: {
       flexShrink: 0,
