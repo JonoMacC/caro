@@ -243,13 +243,14 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   }
 
   /** Returns the marking that sets the canvas being worked in apart from
-      the rest. An outline is used rather than a border, since the border is
-      measured when a place on screen is turned into a place in the layout.
-      Both markings name the same properties and differ only in their values,
-      because a property dropped between renders is cleared rather than put
-      back to what the container asked for. */
+      the rest, shown only while its own selection is empty. An outline is used
+      rather than a border, since the border is measured when a place on
+      screen is turned into a place in the layout. Both markings name the
+      same properties and differ only in their values, because a property
+      dropped between renders is cleared rather than put back to what the
+      container asked for. */
   private activeStyle() {
-    if(!this.props.active) {
+    if(!this.props.active || this.chosen().length > 0) {
       return LayoutCanvas.STYLE.idle;
     }
     return LayoutCanvas.STYLE.active;
