@@ -33,6 +33,17 @@ const HALO = 1;
     screen. */
 const MARQUEE_BORDER = 2;
 
+/** How thick the rectangle around the selection is painted, in pixels of
+    screen, held to that regardless of the canvas's zoom. */
+const TRANSFORM_BORDER = 1;
+
+/** How wide and tall the handles at the corners of that rectangle are, in
+    pixels of screen. */
+const HANDLE_SIZE = 7;
+
+/** How rounded the corners of those handles are, in pixels of screen. */
+const HANDLE_RADIUS = 2;
+
 /** How thick the ring around a hovered box is painted, in pixels of
     screen, held to that regardless of the canvas's zoom. Thicker than the
     selected ring so the two read as different states. */
@@ -236,6 +247,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
           onMouseDown={this.onMouseDown} onMouseMove={this.onHover}
           onMouseLeave={this.onLeave}>
         {this.props.boxes.map(this.renderBox)}
+        {this.renderTransform()}
         {this.renderRubberBand()}
         {this.state.guides.map(this.renderGuide)}
         {this.props.boxes.length === 0 &&
@@ -490,6 +502,37 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     this.props.onRemove?.();
   }
 
+  /** Draws the rectangle around the selected boxes, with a handle at each
+      corner. The rectangle is only drawn: a press is told to be at its
+      edges by where it lands (see `grasp`), not by what it lands on. */
+  private renderTransform(): JSX.Element {
+    const chosen = this.chosen();
+    if(chosen.length === 0 || this.state.gesture === Gesture.DRAW) {
+      return null;
+    }
+    const region = extentOf(chosen);
+    const border = this.local(TRANSFORM_BORDER);
+    const size = `${this.local(HANDLE_SIZE)}px`;
+    const offset = `${-(this.local(HANDLE_SIZE) + border) / 2}px`;
+    const handle = (corner: {left?: string, right?: string, top?: string,
+        bottom?: string}) => (
+      <div data-transform-handle=''
+        style={{...LayoutCanvas.STYLE.handle, ...corner, width: size,
+          height: size, border: `${border}px solid #684BC7`,
+          borderRadius: `${this.local(HANDLE_RADIUS)}px`}}/>);
+    return (
+      <div data-transform=''
+          style={{...LayoutCanvas.STYLE.transform,
+            border: `${border}px solid #684BC7`,
+            left: `${region.x}px`, top: `${region.y}px`,
+            width: `${region.width}px`, height: `${region.height}px`}}>
+        {handle({left: offset, top: offset})}
+        {handle({right: offset, top: offset})}
+        {handle({left: offset, bottom: offset})}
+        {handle({right: offset, bottom: offset})}
+      </div>);
+  }
+
   private renderRubberBand(): JSX.Element {
     if(this.state.gesture !== Gesture.DRAW || !this.isActive()) {
       return null;
@@ -645,10 +688,16 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   }
 
   /** Returns the topmost box a point has an edge of, or null when it has
-      none of them. */
+      none of them. While several boxes are selected they are only ever
+      transformed together, by the edges of their bounding box, so
+      none of them is offered on its own. */
   private nearest(point: Point, beyond: boolean): Grasp {
+    const together = this.chosen().length > 1;
     for(let index = this.props.boxes.length - 1; index >= 0; index -= 1) {
       const box = this.props.boxes[index];
+      if(together && this.props.selection.indexOf(box) !== -1) {
+        continue;
+      }
       const handle = this.handleFor([box], point, beyond);
       if(handle !== null) {
         return {handle, boxes: [box]};
@@ -872,9 +921,12 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     return best;
   }
 
-  /** Resizes the held boxes, moving only the edges the press has hold of,
-      pulled the rest of the way to a nearby edge when it comes close
-      enough. */
+  /** Resizes the bounding box, moving only the edges the
+      press has hold of, pulled the rest of the way to a nearby edge when it
+      comes close enough. Every box is carried along with it, scaled about
+      the edges that stay put, so that the boxes keep their places within
+      the bounding box. Each edge of a box is rounded rather than each size, so
+      boxes that met still meet. */
   private resize(point: Point): void {
     this.restore();
     const handle = this.state.handle;
@@ -900,30 +952,35 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       down = rawDown + LayoutCanvas.closest(
         [region.y + rawDown], this.targetsAlong(false), distance);
     }
+    const right = region.x + region.width;
+    const bottom = region.y + region.height;
+    let left = region.x;
+    let top = region.y;
+    let farRight = right;
+    let farBottom = bottom;
+    if(handle.right) {
+      farRight = Math.max(right + across, region.x + MINIMUM_SIZE);
+    } else if(handle.left) {
+      left = Math.min(Math.max(region.x + across, 0), right - MINIMUM_SIZE);
+    }
+    if(handle.bottom) {
+      farBottom = Math.max(bottom + down, region.y + MINIMUM_SIZE);
+    } else if(handle.top) {
+      top = Math.min(Math.max(region.y + down, 0), bottom - MINIMUM_SIZE);
+    }
+    const scaleX = region.width === 0 ? 1 : (farRight - left) / region.width;
+    const scaleY = region.height === 0 ? 1 : (farBottom - top) / region.height;
     for(const held of this.held) {
-      if(handle.right && held.x + held.width >= region.x + region.width - 1) {
-        held.box.width = Math.max(Math.round(held.width + across),
-          MINIMUM_SIZE);
-      }
-      if(handle.left && held.x <= region.x + 1) {
-        const rightEdge = held.x + held.width;
-        const x = Math.min(Math.max(Math.round(held.x + across), 0),
-          rightEdge - MINIMUM_SIZE);
-        held.box.x = x;
-        held.box.width = rightEdge - x;
-      }
-      if(handle.bottom &&
-          held.y + held.height >= region.y + region.height - 1) {
-        held.box.height = Math.max(Math.round(held.height + down),
-          MINIMUM_SIZE);
-      }
-      if(handle.top && held.y <= region.y + 1) {
-        const bottomEdge = held.y + held.height;
-        const y = Math.min(Math.max(Math.round(held.y + down), 0),
-          bottomEdge - MINIMUM_SIZE);
-        held.box.y = y;
-        held.box.height = bottomEdge - y;
-      }
+      const x = Math.round(left + (held.x - region.x) * scaleX);
+      const farX = Math.round(
+        left + (held.x + held.width - region.x) * scaleX);
+      const y = Math.round(top + (held.y - region.y) * scaleY);
+      const farY = Math.round(
+        top + (held.y + held.height - region.y) * scaleY);
+      held.box.x = x;
+      held.box.width = Math.max(farX - x, MINIMUM_SIZE);
+      held.box.y = y;
+      held.box.height = Math.max(farY - y, MINIMUM_SIZE);
     }
     this.props.onChange?.();
   }
@@ -1313,6 +1370,18 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       position: 'absolute' as 'absolute',
       boxSizing: 'border-box' as 'border-box',
       backgroundColor: 'rgba(104, 75, 199, 0.1)',
+      pointerEvents: 'none' as 'none'
+    },
+    transform: {
+      position: 'absolute' as 'absolute',
+      boxSizing: 'border-box' as 'border-box',
+      pointerEvents: 'none' as 'none',
+      zIndex: 2
+    },
+    handle: {
+      position: 'absolute' as 'absolute',
+      boxSizing: 'border-box' as 'border-box',
+      backgroundColor: '#FFFFFF',
       pointerEvents: 'none' as 'none'
     },
     guide: {
