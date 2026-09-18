@@ -197,6 +197,9 @@ async function main() {
   check('a box in a layer can be selected',
     await evaluate(`document.body.textContent.indexOf(
       'Select a box to edit it.') === -1`), true);
+  check('the canvas holding the selection draws no outline of its own',
+    await evaluate(`getComputedStyle(document.querySelectorAll(
+      '[data-canvas]')[1]).outlineColor`) === 'rgb(104, 75, 199)', false);
   await key('Delete');
   survey = await evaluate(SURVEY);
   check('and deleting it leaves the layout alone',
