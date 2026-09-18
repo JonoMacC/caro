@@ -41,10 +41,12 @@ const READ_RECTS = `(() => {
 })()`;
 const ROWS = `(() => {
   const panel = document.querySelector('[data-outline]');
-  return Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
+  return Array.from(panel.querySelectorAll('div > button:last-child'))
     .map(b => {
-      const pad = parseInt(b.parentElement.style.paddingLeft) / 12;
-      return '..'.repeat(pad) + b.textContent.trim();
+      const twist = b.previousElementSibling;
+        const pad = twist ? (parseInt(twist.style.width) - 14) / 12 :
+          (parseInt(b.style.paddingLeft) - 16) / 12;
+      return '..'.repeat(pad) + b.children[0].textContent.trim();
     });
 })()`;
 

@@ -357,11 +357,24 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       }
       return this.alignedStyle();
     })();
-    const elevated = this.isHeld(box) ? LayoutCanvas.STYLE.elevated : {};
+    const elevated = (() => {
+      if(this.isHeld(box)) {
+        return LayoutCanvas.STYLE.elevated;
+      }
+      return {};
+    })();
+    const attributes = (() => {
+      if(marked) {
+        return {'data-selected': ''};
+      }
+      if(hovered) {
+        return {'data-hovered': ''};
+      }
+      return {};
+    })();
     return (
       <div key={this.keyOf(box)} data-keeps-selection=''
-          data-selected={marked ? '' : undefined}
-          data-hovered={hovered ? '' : undefined}
+          {...attributes}
           ref={element => this.elements.set(box, element)}
           onMouseEnter={() => this.props.onHover?.(box)}
           onMouseLeave={() => this.props.onHover?.(null)}
@@ -371,7 +384,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
             ...this.paintFor(box, marked, hovered), ...selection,
             ...alignment, ...elevated,
             ...LayoutCanvas.cursorFor(this.state.handle)}}>
-        {this.state.renaming === box ?
+        {this.state.renaming === box &&
           <input style={{...LayoutCanvas.STYLE.renameInput,
               fontSize: `${this.local(LABEL_SIZE)}px`,
               padding: `0 ${this.local(4)}px`,
@@ -390,11 +403,11 @@ export class LayoutCanvas extends React.Component<Properties, State> {
                   this.submitRename();
                 }
               }}
-              onBlur={this.submitRename}/> :
-          label !== '' &&
-            <span data-box-label='' style={{...LayoutCanvas.STYLE.label,
-              ...LayoutCanvas.inkFor(box),
-              fontSize: `${this.local(LABEL_SIZE)}px`}}>{label}</span>}
+              onBlur={this.submitRename}/>}
+        {this.state.renaming !== box && label !== '' &&
+          <span data-box-label='' style={{...LayoutCanvas.STYLE.label,
+            ...LayoutCanvas.inkFor(box),
+            fontSize: `${this.local(LABEL_SIZE)}px`}}>{label}</span>}
         {this.renderRepeat(box)}
         {this.renderDelete(box)}
       </div>);
@@ -828,9 +841,11 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       if(moving.indexOf(other) !== -1) {
         continue;
       }
-      targets.push(vertical ? other.x : other.y,
-        vertical ? other.right : other.bottom,
-        vertical ? other.x + other.width / 2 : other.y + other.height / 2);
+      if(vertical) {
+        targets.push(other.x, other.right, other.x + other.width / 2);
+      } else {
+        targets.push(other.y, other.bottom, other.y + other.height / 2);
+      }
     }
     return targets;
   }
@@ -1043,7 +1058,10 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   /** Returns whichever of two edges is farther from a reference point,
       the "far edge" a center guide reaches for. */
   private static farEdge(from: number, a: number, b: number): number {
-    return Math.abs(a - from) > Math.abs(b - from) ? a : b;
+    if(Math.abs(a - from) > Math.abs(b - from)) {
+      return a;
+    }
+    return b;
   }
 
   private static collect(guides: Guide[], moving: number[], edges: number[],

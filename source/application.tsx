@@ -187,6 +187,12 @@ export class Application extends React.Component<{}, State> {
     if(event.defaultPrevented || Application.isTyping()) {
       return;
     }
+    const amount = (() => {
+      if(event.shiftKey) {
+        return BIG_NUDGE_AMOUNT;
+      }
+      return NUDGE_AMOUNT;
+    })();
     if(event.ctrlKey || event.metaKey) {
       if(event.key === 'c' || event.key === 'C') {
         this.onCopy(event);
@@ -220,8 +226,7 @@ export class Application extends React.Component<{}, State> {
       } else if(Application.isArrow(event.key) &&
           this.state.selection.length > 0) {
         event.preventDefault();
-        this.onResizeNudge(event.key,
-          event.shiftKey ? BIG_NUDGE_AMOUNT : NUDGE_AMOUNT);
+        this.onResizeNudge(event.key, amount);
       }
       return;
     }
@@ -235,8 +240,7 @@ export class Application extends React.Component<{}, State> {
     }
     if(Application.isArrow(event.key)) {
       event.preventDefault();
-      this.onMoveNudge(event.key,
-        event.shiftKey ? BIG_NUDGE_AMOUNT : NUDGE_AMOUNT);
+      this.onMoveNudge(event.key, amount);
       return;
     }
     if(event.key !== 'Delete' && event.key !== 'Backspace') {
@@ -250,13 +254,21 @@ export class Application extends React.Component<{}, State> {
       fixed top-left origin the same way a mouse drag does. */
   private onMoveNudge = (key: string, amount: number): void => {
     const dx = (() => {
-      if(key === 'ArrowRight') { return amount; }
-      if(key === 'ArrowLeft') { return -amount; }
+      if(key === 'ArrowRight') {
+        return amount;
+      }
+      if(key === 'ArrowLeft') {
+        return -amount;
+      }
       return 0;
     })();
     const dy = (() => {
-      if(key === 'ArrowDown') { return amount; }
-      if(key === 'ArrowUp') { return -amount; }
+      if(key === 'ArrowDown') {
+        return amount;
+      }
+      if(key === 'ArrowUp') {
+        return -amount;
+      }
       return 0;
     })();
     const across = Math.max(dx,
@@ -267,7 +279,11 @@ export class Application extends React.Component<{}, State> {
       box.x += across;
       box.y += down;
     }
-    this.commit({}, dx !== 0 ? 'nudge-x' : 'nudge-y');
+    if(dx !== 0) {
+      this.commit({}, 'nudge-x');
+    } else {
+      this.commit({}, 'nudge-y');
+    }
   }
 
   /** Resizes the selection by an arrow key, the top-left corner always
@@ -286,7 +302,11 @@ export class Application extends React.Component<{}, State> {
       }
     }
     const horizontal = key === 'ArrowRight' || key === 'ArrowLeft';
-    this.commit({}, horizontal ? 'resize-width' : 'resize-height');
+    if(horizontal) {
+      this.commit({}, 'resize-width');
+    } else {
+      this.commit({}, 'resize-height');
+    }
   }
 
   private static isArrow(key: string): boolean {
@@ -477,7 +497,12 @@ export class Application extends React.Component<{}, State> {
   }
 
   private onMoveScenario = (layout: Layout, offset: number) => {
-    const layouts = this.state.component.layouts;
+    const component = this.state.board.components.find(
+      component => component.layouts.includes(layout));
+    if(component === undefined) {
+      return;
+    }
+    const layouts = component.layouts;
     const index = layouts.indexOf(layout);
     const target = index + offset;
     if(index <= 0 || target <= 0 || target >= layouts.length) {

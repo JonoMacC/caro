@@ -125,6 +125,7 @@ interface Properties {
   /** Called when the cursor rests on a row's box or leaves it, naming null
       in the latter case. */
   onHover?: (box: Box) => void;
+
   /** Called to move a section to a new position among its siblings. */
   onMoveSection?: (component: Component, offset: number) => void;
 
@@ -364,8 +365,15 @@ export class OutlinePanel extends React.Component<Properties, State> {
       draggable: false,
       renamable: true,
       style: {...this.amissStyle(this.boxFaults(component, box)),
-        ...(hovered ? OutlinePanel.STYLE.hovered : {}),
-        ...(chosen ? OutlinePanel.STYLE.chosen : {})},
+        ...(() => {
+          if(chosen) {
+            return OutlinePanel.STYLE.chosen;
+          }
+          if(hovered) {
+            return OutlinePanel.STYLE.hovered;
+          }
+          return {};
+        })()},
       visit,
       choose: visit
     });
@@ -491,6 +499,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       return;
     }
     if(wasCurrent && entry.renamable) {
+      entry.choose();
       this.cancelling = false;
       this.setState({renaming: entry, draft: OutlinePanel.rawNameOf(entry)});
       return;
@@ -671,6 +680,9 @@ export class OutlinePanel extends React.Component<Properties, State> {
   }
 
   private onRowMouseDown = (event: React.MouseEvent, entry: Entry) => {
+    if(event.button !== 0) {
+      return;
+    }
     this.suppressClick = false;
     this.dragOrigin = {x: event.clientX, y: event.clientY};
     this.dragActive = false;
@@ -737,7 +749,10 @@ export class OutlinePanel extends React.Component<Properties, State> {
     const list = this.siblingsOf(this.dragEntry);
     const current = list.indexOf(this.dragEntry.node);
     const candidateIndex = list.indexOf(candidate.node);
-    const arrayIndex = after ? candidateIndex + 1 : candidateIndex;
+    let arrayIndex = candidateIndex;
+    if(after) {
+      arrayIndex += 1;
+    }
     if(arrayIndex === current || arrayIndex === current + 1) {
       this.clearDrop();
       return;
@@ -781,8 +796,10 @@ export class OutlinePanel extends React.Component<Properties, State> {
     }
     const list = this.siblingsOf(this.dragEntry);
     const current = list.indexOf(this.dragEntry.node);
-    const finalIndex = this.dropTarget > current ?
-      this.dropTarget - 1 : this.dropTarget;
+    let finalIndex = this.dropTarget;
+    if(this.dropTarget > current) {
+      finalIndex -= 1;
+    }
     const offset = finalIndex - current;
     if(this.dragEntry.depth === 0) {
       this.props.onMoveSection?.(this.dragEntry.component, offset);

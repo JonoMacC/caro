@@ -53,16 +53,18 @@ async function main(){
 
   const rows = () => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    return Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
+    return Array.from(panel.querySelectorAll('div > button:last-child'))
       .map(b => {
-        const pad = parseInt(b.parentElement.style.paddingLeft) / 12;
-        return '..'.repeat(pad) + b.textContent.trim();
+        const twist = b.previousElementSibling;
+        const pad = twist ? (parseInt(twist.style.width) - 14) / 12 :
+          (parseInt(b.style.paddingLeft) - 16) / 12;
+        return '..'.repeat(pad) + b.children[0].textContent.trim();
       });
   })()`);
   const rowRect = label => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    const row = Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)});
+    const row = Array.from(panel.querySelectorAll('div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === ${JSON.stringify(label)});
     if(row === undefined) { return null; }
     const r = row.parentElement.getBoundingClientRect();
     return {x: r.left + r.width / 2, y: r.top + r.height / 2};
@@ -80,8 +82,8 @@ async function main(){
   const rowIsEditing = label => evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
     const row = Array.from(panel.querySelectorAll('div')).find(d => {
-      const b = d.querySelector('button:nth-child(2)');
-      return b !== null && b.textContent.trim() === ${JSON.stringify(label)};
+      const b = d.querySelector('button:last-child');
+      return b !== null && b.children[0].textContent.trim() === ${JSON.stringify(label)};
     });
     if(row !== undefined) { return false; }
     return Array.from(panel.querySelectorAll('input')).length > 0;
@@ -245,8 +247,8 @@ async function main(){
   // one (now that it was the last thing clicked on the canvas) renames.
   await evaluate(`(() => {
     const panel = document.querySelector('[data-outline]');
-    Array.from(panel.querySelectorAll('div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === '<Renamed>').focus();
+    Array.from(panel.querySelectorAll('div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === '<Renamed>').focus();
   })()`);
   await pause(200);
   await pressEnter();
@@ -268,7 +270,7 @@ async function main(){
 
   // Space enters rename on an already-focused row; Enter does not.
   await evaluate(`document.querySelectorAll(
-    '[data-outline] div > button:nth-child(2)')[0].focus()`);
+    '[data-outline] div > button:last-child')[0].focus()`);
   await pause(200);
   await pressEnter();
   check('Enter on a focused row does not rename', await evaluate(
@@ -284,7 +286,7 @@ async function main(){
   // clicked or tabbed to again.
   const isRowFocused = () => evaluate(`document.activeElement ===
     document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)')[0]`);
+      '[data-outline] div > button:last-child')[0]`);
   await pressEscape();
   await pause(200);
   check('focus returns to the row after Escape cancels', await isRowFocused(),

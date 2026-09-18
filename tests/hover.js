@@ -47,16 +47,16 @@ async function main(){
   })()`);
   const row = () => evaluate(`(() => {
     const b = Array.from(document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === 'space');
+      '[data-outline] div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === 'space');
     const r = b.parentElement.getBoundingClientRect();
     return {x: r.left + r.width / 2, y: r.top + r.height / 2,
       background: getComputedStyle(b.parentElement).backgroundColor};
   })()`);
   const rowAt = label => evaluate(`(() => {
     const b = Array.from(document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)});
+      '[data-outline] div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === ${JSON.stringify(label)});
     const r = b.parentElement.getBoundingClientRect();
     return {x: r.left + r.width / 2, y: r.top + r.height / 2};
   })()`);
@@ -97,8 +97,8 @@ async function main(){
   // canvas, but is still marked hovered itself.
   const rowBackground = label => evaluate(`(() => {
     const b = Array.from(document.querySelectorAll(
-      '[data-outline] div > button:nth-child(2)'))
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)});
+      '[data-outline] div > button:last-child'))
+      .find(b => b.children[0].textContent.trim() === ${JSON.stringify(label)});
     return getComputedStyle(b.parentElement).backgroundColor;
   })()`);
   const main = await rowAt('Main');
