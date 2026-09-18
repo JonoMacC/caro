@@ -214,6 +214,29 @@ async function main() {
   check('the left edge resizes too',
     await cursorAt(last().left + 2, last().y), 'ew-resize');
 
+  // Dragging the left edge to the canvas's own left edge pins it there;
+  // dragging further left must not keep growing the box the other way.
+  const beforeLeft = last();
+  await session.mouse('mousePressed', beforeLeft.left + 2, beforeLeft.y);
+  await session.mouse('mouseMoved', canvas.left + 1, beforeLeft.y, 1);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  rects = await session.evaluate(READ_RECTS);
+  const atEdge = last();
+  await session.mouse('mouseMoved', canvas.left - 60, beforeLeft.y, 1);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  rects = await session.evaluate(READ_RECTS);
+  const overshot = last();
+  await session.mouse('mouseReleased', canvas.left - 60, beforeLeft.y);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  console.log(`      at the edge: left=${atEdge.left} right=${atEdge.right}` +
+    `, overshot: left=${overshot.left} right=${overshot.right}`);
+  check('the box is pinned once its left edge reaches the canvas edge',
+    Math.abs(atEdge.left - canvas.left) <= 2, true);
+  check('dragging further left is a no-op once pinned',
+    overshot.left, atEdge.left);
+  check('the right edge does not drift either', overshot.right,
+    atEdge.right);
+
   const summary = (() => {
     if(failures === 0) { return 'resizing works'; }
     return failures + ' FAILURES';
