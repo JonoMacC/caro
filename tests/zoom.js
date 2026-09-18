@@ -151,13 +151,21 @@ async function main() {
       if(b === null) return null;
       const r = b.getBoundingClientRect();
       return {left: Math.round(r.left), top: Math.round(r.top),
-        width: Math.round(r.width), height: Math.round(r.height)};
+        width: Math.round(r.width), height: Math.round(r.height),
+        border: getComputedStyle(b).borderTopWidth};
     })()`);
   if(band !== null) {
     check('the rubber band tracks the cursor, not the zoom',
       [band.width, band.height], [200, 100]);
     check('and sits where the drag started',
       [band.left, band.top], [Math.round(c.left) + 40, Math.round(c.top) + 240]);
+    // CSS zoom scales the border for painting without changing what
+    // getComputedStyle reports, so the on-screen thickness is that
+    // reported width times the zoom factor -- it should stay 2px
+    // however far zoomed in, not just at 100%.
+    const zoomFactor = parseFloat(await percentage()) / 100;
+    check('its border stays a constant screen thickness at 200%',
+      parseFloat(band.border) * zoomFactor, 2);
   } else {
     console.log('     (no rubber band found to measure)');
   }

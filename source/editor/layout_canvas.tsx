@@ -22,6 +22,10 @@ const EDGE = 3;
 /** How thick the ring around a selected box is painted. */
 const RING = 3;
 
+/** How thick the box-creation marquee's border is painted, in pixels of
+    screen. */
+const MARQUEE_BORDER = 2;
+
 /** How close to an edge the cursor must be to resize a box, in pixels of
     screen. */
 const RESIZE_MARGIN = 8;
@@ -339,6 +343,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     const region = this.measure();
     return (
       <div style={{...LayoutCanvas.STYLE.rubberBand,
+        border: `${this.local(MARQUEE_BORDER)}px dashed #684BC7`,
         left: `${region.x}px`, top: `${region.y}px`,
         width: `${region.width}px`, height: `${region.height}px`}}/>);
   }
@@ -921,7 +926,6 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     rubberBand: {
       position: 'absolute' as 'absolute',
       boxSizing: 'border-box' as 'border-box',
-      border: '2px dashed #684BC7',
       backgroundColor: 'rgba(104, 75, 199, 0.1)',
       pointerEvents: 'none' as 'none'
     },
