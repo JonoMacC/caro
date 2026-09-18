@@ -19,8 +19,15 @@ const MINIMUM_SIZE = 1;
 /** How thick a box's policy edges are painted, in pixels of screen. */
 const EDGE = 3;
 
-/** How thick the ring around a selected box is painted. */
-const RING = 3;
+/** How thick the ring around a selected box is painted, in pixels of
+    screen, held to that regardless of the canvas's zoom. */
+const RING = 1;
+
+/** How thick the line separating a selected box's ring from the policy
+    edge beneath it is painted, in pixels of screen, held to that
+    regardless of the canvas's zoom. Without it the ring's colour can be
+    hard to tell apart from a policy edge of a similar shade. */
+const HALO = 1;
 
 /** How close to an edge the cursor must be to resize a box, in pixels of
     screen. */
@@ -262,7 +269,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     const marked = this.props.selection.indexOf(box) !== -1;
     const selection = (() => {
       if(marked) {
-        return LayoutCanvas.STYLE.selected;
+        return this.selectedStyle();
       }
       return {};
     })();
@@ -278,7 +285,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
           style={{...LayoutCanvas.STYLE.box,
             left: `${box.x}px`, top: `${box.y}px`,
             width: `${box.width}px`, height: `${box.height}px`,
-            ...LayoutCanvas.paintFor(box, marked), ...selection,
+            ...this.paintFor(box, marked), ...selection,
             ...alignment, ...LayoutCanvas.cursorFor(this.state.handle)}}>
         {label !== '' &&
           <span style={{...LayoutCanvas.STYLE.label,
@@ -358,6 +365,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   /** Converts a length in pixels of screen into one in the layout. */
   private local(value: number): number {
     return value / this.props.zoom;
+  }
+
+  /** Returns the outline marking a selected box. */
+  private selectedStyle() {
+    const ring = this.local(RING);
+    return {
+      outline: `${ring}px solid #684BC7`,
+      outlineOffset: `-${ring}px`
+    };
   }
 
   /** Converts a place on screen into a place in the layout. */
@@ -807,9 +823,11 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   }
 
   /** Returns the painting a box carries: a policy colour along each edge,
-      the strong purple along the edge a repeat runs from, and a fill where
-      both policies agree. */
-  private static paintFor(box: Box, marked: boolean) {
+      the strong purple along the edge a repeat runs from, a fill where
+      both policies agree, and, on a selected box, a line of a neutral
+      colour laid between its ring and the policy colour so the two are
+      never read as one border. */
+  private paintFor(box: Box, marked: boolean) {
     const same = box.widthPolicy === box.heightPolicy;
     const across = LayoutCanvas.edgeFor(box.widthPolicy, same);
     const down = LayoutCanvas.edgeFor(box.heightPolicy, same);
@@ -821,17 +839,17 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       `inset -${EDGE}px 0 0 0 ${edges.right}, ` +
       `inset 0 ${EDGE}px 0 0 ${edges.top}, ` +
       `inset 0 -${EDGE}px 0 0 ${edges.bottom}`;
-    const ring = (() => {
+    const painted = (() => {
       if(!marked) {
         return boxShadow;
       }
-      return `${boxShadow}, inset 0 0 0 ${EDGE + RING + 1}px #FFFFFF`;
+      const rim = this.local(RING) + this.local(HALO);
+      return `inset 0 0 0 ${rim}px #FFFFFF, ${boxShadow}`;
     })();
     if(!same) {
-      return {boxShadow: ring};
+      return {boxShadow: painted};
     }
-    return {boxShadow: ring,
-      backgroundColor: POLICY_COLOR[box.widthPolicy]};
+    return {boxShadow: painted, backgroundColor: POLICY_COLOR[box.widthPolicy]};
   }
 
   /** Returns where the repeat arrow sits, which is centred on the edge the
@@ -877,10 +895,6 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       backgroundColor: '#FAFAFA',
       cursor: 'move',
       fontSize: '12px'
-    },
-    selected: {
-      outline: `${RING}px solid #684BC7`,
-      outlineOffset: `-${EDGE + RING}px`
     },
     active: {
       outline: '2px solid #684BC7',
