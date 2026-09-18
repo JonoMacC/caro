@@ -357,6 +357,7 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       }
       return this.alignedStyle();
     })();
+    const elevated = this.isHeld(box) ? LayoutCanvas.STYLE.elevated : {};
     return (
       <div key={this.keyOf(box)} data-keeps-selection=''
           data-selected={marked ? '' : undefined}
@@ -368,7 +369,8 @@ export class LayoutCanvas extends React.Component<Properties, State> {
             left: `${box.x}px`, top: `${box.y}px`,
             width: `${box.width}px`, height: `${box.height}px`,
             ...this.paintFor(box, marked, hovered), ...selection,
-            ...alignment, ...LayoutCanvas.cursorFor(this.state.handle)}}>
+            ...alignment, ...elevated,
+            ...LayoutCanvas.cursorFor(this.state.handle)}}>
         {this.state.renaming === box ?
           <input style={{...LayoutCanvas.STYLE.renameInput,
               fontSize: `${this.local(LABEL_SIZE)}px`,
@@ -656,6 +658,19 @@ export class LayoutCanvas extends React.Component<Properties, State> {
   private chosen(): Box[] {
     return this.props.boxes.filter(
       box => this.props.selection.indexOf(box) !== -1);
+  }
+
+  /** Whether a box is one of the ones currently being dragged or resized,
+      so its own render can bring it to the front — a purely visual
+      reordering; the array `boxes` (and so the outline panel's own order)
+      is never touched. `held` alone isn't enough to answer this, since it
+      stays populated after a gesture ends. */
+  private isHeld(box: Box): boolean {
+    if(this.state.gesture !== Gesture.DRAG &&
+        this.state.gesture !== Gesture.RESIZE) {
+      return false;
+    }
+    return this.held.some(held => held.box === box);
   }
 
   private onHover = (event: React.MouseEvent) => {
@@ -1235,6 +1250,9 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     idle: {
       outline: '2px solid transparent',
       outlineOffset: '1px'
+    },
+    elevated: {
+      zIndex: 1
     },
     remove: {
       position: 'absolute' as 'absolute',
