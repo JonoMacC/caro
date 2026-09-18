@@ -656,25 +656,30 @@ export class LayoutCanvas extends React.Component<Properties, State> {
     this.props.onCommit?.();
   }
 
-  /** Returns a box covering a drawn rectangle. */
+  /** Returns a box covering a drawn rectangle, clipped to the canvas so
+      it's never created with a negative position. */
   private build(region: {x: number, y: number, width: number,
       height: number}): Box {
+    const x = Math.max(region.x, 0);
+    const y = Math.max(region.y, 0);
+    const width = region.width - (x - region.x);
+    const height = region.height - (y - region.y);
     const extent = this.extent();
     const widthPolicy = (() => {
-      if(LayoutCanvas.fills(region.width, extent.width)) {
+      if(LayoutCanvas.fills(width, extent.width)) {
         return SizePolicy.FILL;
       }
       return SizePolicy.FIXED;
     })();
     const heightPolicy = (() => {
-      if(LayoutCanvas.fills(region.height, extent.height)) {
+      if(LayoutCanvas.fills(height, extent.height)) {
         return SizePolicy.FILL;
       }
       return SizePolicy.FIXED;
     })();
-    return new Box('', Math.round(region.x), Math.round(region.y),
-      Math.max(Math.round(region.width), MINIMUM_SIZE),
-      Math.max(Math.round(region.height), MINIMUM_SIZE), widthPolicy,
+    return new Box('', Math.round(x), Math.round(y),
+      Math.max(Math.round(width), MINIMUM_SIZE),
+      Math.max(Math.round(height), MINIMUM_SIZE), widthPolicy,
       heightPolicy);
   }
 
