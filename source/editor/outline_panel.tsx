@@ -84,6 +84,9 @@ interface Properties {
   /** The boxes currently selected, empty when none are. */
   selection: Box[];
 
+  /** The box the cursor rests on, null when none does. */
+  hovered: Box;
+
   /** What is amiss in each section, so that a section can be marked
       without being visited. */
   problems: Map<Component, Problem[]>;
@@ -96,12 +99,20 @@ interface Properties {
 
   /** Called to select a box and bring it into view. */
   onReveal?: (component: Component, box: Box) => void;
+
+  /** Called when the cursor rests on a row's box or leaves it, naming null
+      in the latter case. */
+  onHover?: (box: Box) => void;
 }
 
 interface State {
   open: Set<object>;
   width: number;
   focus: number;
+
+  /** The node a row without a box of its own is marked hovered by, since
+      there is no selection-like prop to carry that for it. */
+  hovered: object;
 }
 
 /** Lists a whole specification as a tree of sections, scenarios, layers and
@@ -110,7 +121,8 @@ interface State {
 export class OutlinePanel extends React.Component<Properties, State> {
   constructor(props: Properties) {
     super(props);
-    this.state = {open: new Set<object>(), width: WIDTH, focus: -1};
+    this.state = {open: new Set<object>(), width: WIDTH, focus: -1,
+      hovered: null};
     this.grabbed = 0;
     this.held = 0;
     this.rows = [];
@@ -182,7 +194,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
         leaf: scenarios.length === 0,
         open,
         style: {...this.amissStyle(this.sectionFaults(component)),
-          ...this.editingStyle(component)},
+          ...this.hoverStyle(component), ...this.editingStyle(component)},
         visit: () => this.props.onSection?.(component),
         choose: () => {
           const here = component === this.props.component;
@@ -217,7 +229,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
       open,
       style: {...this.amissStyle(
           this.frameFaults(component, layout.boxes)),
-        ...this.markFor(layout.boxes)},
+        ...this.hoverStyle(layout), ...this.markFor(layout.boxes)},
       visit: () => this.props.onActivate?.(component, layout.boxes),
       choose: () => {
         const here = component === this.props.component;
@@ -247,7 +259,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
         leaf: overlay.length === 0,
         open: shown,
         style: {...this.amissStyle(this.frameFaults(component, overlay)),
-          ...this.markFor(overlay)},
+          ...this.hoverStyle(overlay), ...this.markFor(overlay)},
         visit: () => this.props.onActivate?.(component, overlay),
         choose: () => {
           const here = component === this.props.component;
@@ -267,6 +279,7 @@ export class OutlinePanel extends React.Component<Properties, State> {
   private carry(entries: Entry[], component: Component, box: Box,
       parent: object, depth: number): void {
     const chosen = this.props.selection.indexOf(box) !== -1;
+    const hovered = !chosen && this.props.hovered === box;
     const visit = () => this.props.onReveal?.(component, box);
     entries.push({
       node: box,
@@ -280,12 +293,8 @@ export class OutlinePanel extends React.Component<Properties, State> {
       leaf: true,
       open: false,
       style: {...this.amissStyle(this.boxFaults(component, box)),
-        ...(() => {
-          if(!chosen) {
-            return {};
-          }
-          return OutlinePanel.STYLE.chosen;
-        })()},
+        ...(hovered ? OutlinePanel.STYLE.hovered : {}),
+        ...(chosen ? OutlinePanel.STYLE.chosen : {})},
       visit,
       choose: visit
     });
@@ -311,15 +320,33 @@ export class OutlinePanel extends React.Component<Properties, State> {
         <span style={OutlinePanel.STYLE.name}>{entry.label}</span>
         <span style={OutlinePanel.STYLE.note}>{entry.note}</span>
       </button>);
+    const hover = {
+      onMouseEnter: () => {
+        if(entry.box !== null) {
+          this.props.onHover?.(entry.box);
+        } else {
+          this.setState({hovered: entry.node});
+        }
+      },
+      onMouseLeave: () => {
+        if(entry.box !== null) {
+          this.props.onHover?.(null);
+        } else {
+          this.setState({hovered: null});
+        }
+      }
+    };
     if(entry.leaf) {
       return (
-        <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style}}>
+        <div key={index} {...hover}
+            style={{...OutlinePanel.STYLE.row, ...entry.style}}>
           {label}
         </div>);
     }
     const twist = entry.open ? '\u25BE' : '\u25B8';
     return (
-      <div key={index} style={{...OutlinePanel.STYLE.row, ...entry.style}}>
+      <div key={index} {...hover}
+          style={{...OutlinePanel.STYLE.row, ...entry.style}}>
         <button style={{...OutlinePanel.STYLE.twist,
             width: `${TWIST_WIDTH + entry.depth * INDENT}px`}} tabIndex={-1}
             onClick={() => this.toggle(entry.node)} title='Fold'>
@@ -507,6 +534,15 @@ export class OutlinePanel extends React.Component<Properties, State> {
     return OutlinePanel.STYLE.editing;
   }
 
+  /** Returns the marking that says the cursor rests on a row with no box
+      of its own to carry that on, a section, scenario or layer. */
+  private hoverStyle(node: object) {
+    if(this.state.hovered !== node) {
+      return {};
+    }
+    return OutlinePanel.STYLE.hovered;
+  }
+
   /** Returns a box's size written in the colours of the policies that
       decide it, the width in one and the height in the other, so that what
       a box is made of can be read without selecting it. The darker shade of
@@ -632,6 +668,9 @@ export class OutlinePanel extends React.Component<Properties, State> {
     },
     working: {
       backgroundColor: '#F0ECFA'
+    },
+    hovered: {
+      backgroundColor: '#F5F5F5'
     },
     chosen: {
       backgroundColor: '#684BC7',

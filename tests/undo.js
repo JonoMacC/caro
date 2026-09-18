@@ -135,7 +135,7 @@ async function main(){
   check('selected as it was when it went', await evaluate(`(() => {
     const canvas = document.querySelector('[data-canvas]');
     return Array.from(canvas.children)
-      .filter(c => c.style.outline !== '' &&
+      .filter(c => c.hasAttribute('data-selected') &&
         c.style.boxShadow.indexOf('inset') !== -1)
       .map(c => {
         const label = c.querySelector('span');

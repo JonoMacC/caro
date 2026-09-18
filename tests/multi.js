@@ -101,7 +101,7 @@ async function main() {
       return {name: label === null ? '' : label.textContent.trim(),
         left: Math.round(r.left), top: Math.round(r.top),
         width: Math.round(r.width), height: Math.round(r.height),
-        selected: box.style.outline.indexOf('104, 75, 199') !== -1};
+        selected: box.hasAttribute('data-selected')};
     });
   })()`;
   const boxes = () => evaluate(BOXES);

@@ -71,7 +71,7 @@ async function main(){
     const canvas = document.querySelector('[data-canvas]');
     return Array.from(canvas.children)
       .filter(c => c.style.boxShadow.indexOf('inset') !== -1)
-      .filter(c => c.style.outline !== '')
+      .filter(c => c.hasAttribute('data-selected'))
       .map(c => parseInt(c.style.width) + 'x' + parseInt(c.style.height));
   })()`);
   const c = await evaluate(`(() => { const r=document.querySelector('[data-canvas]').getBoundingClientRect(); return {left:r.left, top:r.top}; })()`);
@@ -193,7 +193,7 @@ async function main(){
   const ring = await evaluate(`(() => {
     const box = Array.from(
       document.querySelector('[data-canvas]').children).find(
-        c => c.style.outline !== '' &&
+        c => c.hasAttribute('data-selected') &&
           c.style.boxShadow.indexOf('inset') !== -1);
     const s = getComputedStyle(box);
     return {colour: s.outlineColor, width: s.outlineWidth,
