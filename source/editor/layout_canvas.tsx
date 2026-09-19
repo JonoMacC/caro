@@ -44,6 +44,22 @@ const HANDLE_SIZE = 7;
 /** How rounded the corners of those handles are, in pixels of screen. */
 const HANDLE_RADIUS = 2;
 
+/** How rounded the corners of the tag showing the size are, in pixels of
+    screen. */
+const TAG_RADIUS = 4;
+
+/** How large the size shown below that rectangle is drawn, in pixels of
+    screen. */
+const TAG_SIZE = 11;
+
+/** How far below the rectangle's bottom edge that size is drawn, in pixels
+    of screen. */
+const TAG_GAP = 3;
+
+/** How far the size sits from the tag edges, in pixels of screen. */
+const TAG_PADDING_X = 8;
+const TAG_PADDING_Y = 2;
+
 /** How thick the ring around a hovered box is painted, in pixels of
     screen, held to that regardless of the canvas's zoom. Thicker than the
     selected ring so the two read as different states. */
@@ -530,6 +546,15 @@ export class LayoutCanvas extends React.Component<Properties, State> {
         {handle({right: offset, top: offset})}
         {handle({left: offset, bottom: offset})}
         {handle({right: offset, bottom: offset})}
+        <div data-transform-size=''
+            style={{...LayoutCanvas.STYLE.tag,
+              top: `calc(100% + ${border + this.local(TAG_GAP)}px)`,
+              fontSize: `${this.local(TAG_SIZE)}px`,
+              padding: `${this.local(TAG_PADDING_Y)}px ` +
+                `${this.local(TAG_PADDING_X)}px`,
+              borderRadius: `${this.local(TAG_RADIUS)}px`}}>
+          {`${region.width} × ${region.height}`}
+        </div>
       </div>);
   }
 
@@ -1382,6 +1407,17 @@ export class LayoutCanvas extends React.Component<Properties, State> {
       position: 'absolute' as 'absolute',
       boxSizing: 'border-box' as 'border-box',
       backgroundColor: '#FFFFFF',
+      pointerEvents: 'none' as 'none'
+    },
+    tag: {
+      position: 'absolute' as 'absolute',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      color: '#FFFFFF',
+      backgroundColor: '#684BC7',
+      lineHeight: 1,
+      whiteSpace: 'nowrap' as 'nowrap',
+      userSelect: 'none' as 'none',
       pointerEvents: 'none' as 'none'
     },
     guide: {
