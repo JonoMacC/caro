@@ -130,10 +130,12 @@ an XD board; the importer reverses them.
 
 A section's scenarios are laid out side by side, as the XD boards draw them.
 The leftmost is the default: it always exists, carries no condition, and
-cannot be moved or deleted, because evaluation runs right to left and takes
-the first match, so anything to the default's left could never be reached.
-Every other scenario carries a condition written as free text and can be
-reordered or deleted. Conditions are not parsed: a selector means something
+cannot be deleted or moved itself, because evaluation runs right to left and
+takes the first match, so anything to the default's left could never be
+reached. The scenario beside it can be moved left over it, which promotes that
+scenario to the default and gives the old default its condition, so the
+condition stays with its position. Every other scenario carries a condition
+written as free text and can be reordered or deleted. Conditions are not parsed: a selector means something
 different to a web target than to a Qt one, and the condition is a field on
 the scenario rather than a label floating beside it, which is what made them
 losable in XD.

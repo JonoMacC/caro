@@ -166,9 +166,9 @@ async function main() {
     await evaluate(
       `document.querySelectorAll('[title="Delete scenario"]').length`),
     cards.length - 2);
-  check('the leftmost movable scenario cannot pass the default',
+  check('the leftmost movable scenario can be promoted over the default',
     await evaluate(`document.querySelectorAll(
-      '[title="Move left"]')[0].disabled`), true);
+      '[title="Move left"]')[0].disabled`), false);
   check('nor can the rightmost pass the blank one',
     await evaluate(`(() => {
       const b = document.querySelectorAll('[title="Move right"]');
@@ -186,6 +186,46 @@ async function main() {
     'default | @media (768px <= width) | ');
   check('its box went with it, and a blank still waits',
     cards.map(c => c.boxes).join('|'), '<Header>||');
+
+  // Promote the second scenario over the default: the two swap places, the
+  // promoted one becoming the default and the old default taking the
+  // condition it had.
+  spot = await canvasAt(1);
+  await draw(spot.left, spot.top, 'Footer');
+  const click = title => evaluate(
+    `document.querySelector('[title="${title}"]').click()`);
+  const settle = () => new Promise(r => setTimeout(r, 200));
+  const movesIn = index => evaluate(`document.querySelectorAll(
+    '[data-canvas]')[${index}].parentElement.querySelectorAll(
+    '[title="Move left"], [title="Move right"]').length`);
+  check('the second scenario, unlike the default, has controls to move it',
+    [await movesIn(0), await movesIn(1)].join(), '0,2');
+  await click('Move left');
+  await settle();
+  cards = await evaluate(CARDS);
+  check('moving the second scenario left promotes it to the default',
+    cards.map(c => c.label).join(' | '), 'default | @media (768px <= width) | ');
+  check('the boxes travel with their scenarios',
+    cards.map(c => c.boxes).join('|'), '<Footer>|<Header>|');
+  check('the old default takes the condition',
+    await evaluate(`document.querySelectorAll(
+      'input[placeholder="condition"]')[0].value`), '@media (768px <= width)');
+  check('and the default still has no controls to move it',
+    [await movesIn(0), await movesIn(1)].join(), '0,2');
+
+  // One undo puts the move and both conditions back.
+  await click('Undo');
+  await settle();
+  cards = await evaluate(CARDS);
+  check('one undo reverses the move and the renaming together',
+    cards.map(c => c.label).join(' | ') + ' / ' +
+    cards.map(c => c.boxes).join('|'),
+    'default | @media (768px <= width) |  / <Header>|<Footer>|');
+  await click('Move left');
+  await settle();
+  cards = await evaluate(CARDS);
+  check('and it can be promoted again',
+    cards.map(c => c.boxes).join('|'), '<Footer>|<Header>|');
 
   console.log(failures === 0 ? '\nscenarios work' : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
