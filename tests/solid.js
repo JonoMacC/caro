@@ -85,11 +85,11 @@ async function main() {
       const caption = Array.from(document.querySelectorAll('span'))
         .find(x => x.textContent === '${axis}');
       if(!caption) return 'no ' + '${axis}' + ' field';
-      const button = Array.from(caption.parentElement
-        .querySelectorAll('button'))
+      const radio = Array.from(caption.parentElement
+        .querySelectorAll('label'))
         .find(x => x.textContent.trim() === '${choice}');
-      if(!button) return 'no ' + '${choice}' + ' button';
-      button.click();
+      if(!radio) return 'no ' + '${choice}' + ' choice';
+      radio.querySelector('input').click();
       return 'ok';
     })()`);
     if(done !== 'ok') throw new Error(done);

@@ -28,33 +28,41 @@ async function main(){
     const s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
     s.call(f, ${JSON.stringify(t)}); f.dispatchEvent(new Event('input',{bubbles:true})); })()`); await pause(300);};
 
-  // The buttons of the properties panel, which are the ones outside the
-  // board and the outline.
+  // The radio buttons of the properties panel, which are the ones outside
+  // the board and the outline, and the buttons among them.
   const CONTROLS = `Array.from(document.querySelectorAll('button')).filter(
     b => b.closest('[data-canvas]') === null &&
       b.closest('[data-outline]') === null)`;
-  const policies = () => evaluate(`${CONTROLS}
-    .map(b => b.textContent.trim())
-    .filter(t => ['Fixed', 'Fill', 'Fit', 'Repeat'].indexOf(t) !== -1)`);
+  const RADIOS = `Array.from(document.querySelectorAll(
+    'input[type="radio"]'))`;
+  const captionOf = radio => `${radio}.closest('label').textContent.trim()`;
+  const policies = () => evaluate(`${RADIOS}
+    .filter(r => r.closest('[data-repeat]') === null)
+    .map(r => ${captionOf('r')})`);
   const setPolicy = async (axis, label) => {
-    await evaluate(`${CONTROLS}
-      .filter(b => b.textContent.trim() === ${JSON.stringify(label)})
+    await evaluate(`${RADIOS}
+      .filter(r => r.closest('[data-repeat]') === null)
+      .filter(r => ${captionOf('r')} === ${JSON.stringify(label)})
       [${axis}].click()`);
     await pause(300);
   };
-  const chosen = () => evaluate(`${CONTROLS}
-    .filter(b => ['Fixed', 'Fill', 'Fit', 'Repeat'].indexOf(
-      b.textContent.trim()) !== -1)
-    .filter(b => getComputedStyle(b).fontWeight === '700')
-    .map(b => b.textContent.trim())`);
+  const chosen = () => evaluate(`${RADIOS}
+    .filter(r => r.closest('[data-repeat]') === null)
+    .filter(r => r.checked).map(r => ${captionOf('r')})`);
   const arrows = () => evaluate(`(() => {
     const row = document.querySelector('[data-repeat]');
     if(row === null) { return null; }
-    return Array.from(row.querySelectorAll('button')).map(b => b.title);
+    return Array.from(row.querySelectorAll('input[type="radio"]'))
+      .map(r => r.value);
+  })()`);
+  const pointed = () => evaluate(`(() => {
+    const row = document.querySelector('[data-repeat]');
+    return Array.from(row.querySelectorAll('input[type="radio"]'))
+      .filter(r => r.checked).map(r => r.value);
   })()`);
   const setDirection = async direction => {
     await evaluate(`document.querySelector(
-      '[data-repeat] button[title=${JSON.stringify(direction)}]').click()`);
+      '[data-repeat] input[value=${JSON.stringify(direction)}]').click()`);
     await pause(300);
   };
   const marked = () => evaluate(`(() => {
@@ -106,7 +114,10 @@ async function main(){
     ['Repeat', 'Repeat']);
   check('which may run any of the four ways', await arrows(),
     ['left', 'right', 'up', 'down']);
-  check('though none is chosen for it', await marked(), null);
+  check('and it runs left until it is told otherwise', await pointed(),
+    ['left']);
+  check('the canvas marking it so', await marked(),
+    {title: 'Repeats left', glyph: '\u2190'});
 
   await setDirection('right');
   check('the canvas marks which way it repeats', await marked(),
@@ -123,15 +134,47 @@ async function main(){
   check('and the direction it ran goes with it', await marked(), null);
 
   await setPolicy(1, 'Repeat');
-  check('repeating it again asks afresh', await marked(), null);
+  check('repeating it again starts it running left afresh', await pointed(),
+    ['left']);
   await setDirection('down');
-  check('and it takes the direction it is given', await marked(),
-    {title: 'Repeats down', glyph: '\u2193'});
   check('marking the top edge for a box that repeats downwards',
     await struck(), ['0px 3px 0px 0px']);
   await setDirection('down');
-  check('while pressing that again says nothing of which way it runs',
-    await marked(), null);
+  check('choosing the direction it runs in again leaves it running so',
+    await pointed(), ['down']);
+  check('there being no way to leave a box without one', await marked(),
+    {title: 'Repeats down', glyph: '\u2193'});
+
+  // A radio button that has the focus takes the arrow keys to move among its
+  // group, leaving the box where it is, and yet the other shortcuts still work.
+  const key = async (name, code, modifiers) => {
+    for(const type of ['keyDown', 'keyUp']) {
+      await send('Input.dispatchKeyEvent', {type, key: name, code: name,
+        modifiers: modifiers || 0, windowsVirtualKeyCode: code,
+        nativeVirtualKeyCode: code});
+    }
+    await pause(300);
+  };
+  const left = () => evaluate(`Array.from(
+    document.querySelector('[data-canvas]').children).find(
+      c => c.style.boxShadow.indexOf('inset') !== -1).style.left`);
+  await setDirection('right');
+  await evaluate(`document.querySelector(
+    '[data-repeat] input[value="right"]').focus()`);
+  const home = await left();
+  await key('ArrowDown', 40);
+  check('the arrow keys move among the radio buttons', await pointed(),
+    ['up']);
+  check('and leave the box where it was', await left(), home);
+  await key('z', 90, 2);
+  check('while the other shortcuts go on working', await pointed(),
+    ['right']);
+
+  await drag(at(120, 70), at(120, 70));
+  await key('ArrowRight', 39);
+  check('once the focus has moved on the arrow keys nudge the box again',
+    await left() !== home, true);
+  await key('z', 90, 2);
 
   await setDirection('up');
   await evaluate(`${CONTROLS}.find(b => b.textContent.trim() === 'Save').click()`);
