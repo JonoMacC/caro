@@ -64,11 +64,15 @@ export class NodeProperties extends React.Component<Properties> {
     return (
       <div style={NodeProperties.STYLE.field}>
         <span style={NodeProperties.STYLE.caption}>{caption}</span>
-        <div style={NodeProperties.STYLE.choices}>
-          {this.renderChoice('Fixed', SizePolicy.FIXED, policy, onPolicy)}
-          {this.renderChoice('Fill', SizePolicy.FILL, policy, onPolicy)}
-          {this.renderChoice('Fit', SizePolicy.FIT, policy, onPolicy)}
-          {this.renderChoice('Repeat', SizePolicy.REPEAT, policy, onPolicy)}
+        <div style={NodeProperties.STYLE.choices} role='radiogroup'
+            aria-label={`${caption} policy`}>
+          {this.renderChoice(caption, 'Fixed', SizePolicy.FIXED, policy,
+            onPolicy)}
+          {this.renderChoice(caption, 'Fill', SizePolicy.FILL, policy,
+            onPolicy)}
+          {this.renderChoice(caption, 'Fit', SizePolicy.FIT, policy, onPolicy)}
+          {this.renderChoice(caption, 'Repeat', SizePolicy.REPEAT, policy,
+            onPolicy)}
         </div>
         <input style={NodeProperties.STYLE.input} type='number' min='0'
           value={size} onChange={onSize}/>
@@ -84,7 +88,8 @@ export class NodeProperties extends React.Component<Properties> {
     return (
       <div style={NodeProperties.STYLE.field} data-repeat=''>
         <span style={NodeProperties.STYLE.caption}>Repeats</span>
-        <div style={NodeProperties.STYLE.arrows}>
+        <div style={NodeProperties.STYLE.arrows} role='radiogroup'
+            aria-label='Repeat direction'>
           {directionsFor(node).map(direction =>
             this.renderArrow(direction, node.repeatDirection))}
         </div>
@@ -92,36 +97,25 @@ export class NodeProperties extends React.Component<Properties> {
   }
 
   private renderArrow(direction: RepeatDirection, chosen: RepeatDirection) {
-    const style = (() => {
-      if(direction === chosen) {
-        return {...NodeProperties.STYLE.arrow, ...NodeProperties.STYLE.chosen,
-          border: '2px solid #684BC7'};
-      }
-      return NodeProperties.STYLE.arrow;
-    })();
     return (
-      <button key={direction} style={style} title={direction}
-          onClick={() => this.onDirection(direction)}>
+      <Choice key={direction} group='repeat-direction' value={direction}
+          title={direction} checked={direction === chosen}
+          style={NodeProperties.STYLE.arrow}
+          onSelect={() => this.onDirection(direction)}>
         {REPEAT_GLYPH[direction]}
-      </button>);
+      </Choice>);
   }
 
-  private renderChoice(caption: string, value: SizePolicy,
+  private renderChoice(axis: string, caption: string, value: SizePolicy,
       policy: SizePolicy, onPolicy: (policy: SizePolicy) => void) {
-    const style = (() => {
-      if(value === policy) {
-        return {...NodeProperties.STYLE.choice,
-          ...NodeProperties.STYLE.chosen,
-          border: '2px solid #684BC7'};
-      }
-      return NodeProperties.STYLE.choice;
-    })();
     return (
-      <button style={style} onClick={() => onPolicy(value)}>
+      <Choice key={value} group={`${axis.toLowerCase()}-policy`} value={value}
+          checked={value === policy} style={NodeProperties.STYLE.choice}
+          onSelect={() => onPolicy(value)}>
         <span style={{...NodeProperties.STYLE.swatch,
           backgroundColor: POLICY_COLOR[value]}}/>
         {caption}
-      </button>);
+      </Choice>);
   }
 
   private onName = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,12 +134,7 @@ export class NodeProperties extends React.Component<Properties> {
   }
 
   private onDirection = (direction: RepeatDirection) => {
-    const node = this.props.selection[0];
-    if(node.repeatDirection === direction) {
-      node.repeatDirection = null;
-    } else {
-      node.repeatDirection = direction;
-    }
+    this.props.selection[0].repeatDirection = direction;
     this.props.onCommit?.(null);
   }
 
@@ -205,6 +194,7 @@ export class NodeProperties extends React.Component<Properties> {
     },
     arrow: {
       flexGrow: 1,
+      textAlign: 'center' as 'center',
       padding: '6px 0',
       fontSize: '14px',
       lineHeight: '14px',
@@ -229,9 +219,6 @@ export class NodeProperties extends React.Component<Properties> {
       flexShrink: 0,
       border: '1px solid rgba(0, 0, 0, 0.2)'
     },
-    chosen: {
-      fontWeight: 700
-    },
     remove: {
       padding: '8px',
       fontSize: '12px',
@@ -239,6 +226,70 @@ export class NodeProperties extends React.Component<Properties> {
       backgroundColor: '#E63F44',
       border: 'none',
       cursor: 'pointer'
+    }
+  };
+}
+
+interface ChoiceProperties {
+
+  /** The name shared by the choices that one of is picked. */
+  group: string;
+
+  /** The value this choice stands for. */
+  value: string;
+
+  /** Whether this is the choice that is picked. */
+  checked: boolean;
+
+  /** How the choice looks when it is not picked. */
+  style: React.CSSProperties;
+
+  /** What the choice is called when its content does not say. */
+  title?: string;
+
+  /** Called when the choice is picked. */
+  onSelect: () => void;
+
+  children?: React.ReactNode;
+}
+
+/** One of a group of radio buttons, drawn as the box its label makes, with
+    the radio button itself left invisible but still focusable. */
+class Choice extends React.Component<ChoiceProperties> {
+  public render(): JSX.Element {
+    const base = {...Choice.STYLE.label, ...this.props.style};
+    const style = (() => {
+      if(this.props.checked) {
+        return {...base, ...Choice.STYLE.chosen, border: '2px solid #684BC7'};
+      }
+      return base;
+    })();
+    return (
+      <label style={style} title={this.props.title}>
+        <input type='radio' style={Choice.STYLE.radio}
+          name={this.props.group} value={this.props.value}
+          aria-label={this.props.title} checked={this.props.checked}
+          onChange={this.props.onSelect}/>
+        {this.props.children}
+      </label>);
+  }
+
+  private static readonly STYLE = {
+    label: {
+      position: 'relative' as 'relative',
+      fontFamily: 'Arial'
+    },
+    radio: {
+      appearance: 'none' as 'none',
+      position: 'absolute' as 'absolute',
+      width: 0,
+      height: 0,
+      margin: 0,
+      opacity: 0,
+      pointerEvents: 'none' as 'none'
+    },
+    chosen: {
+      fontWeight: 700
     }
   };
 }

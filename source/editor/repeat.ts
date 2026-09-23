@@ -11,6 +11,10 @@ export const REPEAT_GLYPH = {
   [RepeatDirection.DOWN]: '\u2193'
 };
 
+/** The direction a box runs in when it starts repeating, so that a box that
+    repeats always says which way it runs. */
+export const DEFAULT_REPEAT_DIRECTION = RepeatDirection.LEFT;
+
 /** Returns whether a box repeats. */
 export function repeats(box: Box): boolean {
   return box.widthPolicy === SizePolicy.REPEAT ||
@@ -37,6 +41,7 @@ export function setWidthPolicy(box: Box, policy: SizePolicy): void {
     box.heightPolicy = policy;
   }
   settleRepeat(box);
+  startRepeat(box);
 }
 
 /** Sizes a box down, carrying its other axis with it into or out of
@@ -48,6 +53,7 @@ export function setHeightPolicy(box: Box, policy: SizePolicy): void {
     box.widthPolicy = policy;
   }
   settleRepeat(box);
+  startRepeat(box);
 }
 
 /** Returns the edge a repeat runs from, which is the one facing the way it
@@ -71,5 +77,13 @@ export function runsFrom(direction: RepeatDirection): Edge {
 export function settleRepeat(box: Box): void {
   if(directionsFor(box).indexOf(box.repeatDirection) === -1) {
     box.repeatDirection = null;
+  }
+}
+
+/** Gives a box that has just started repeating the direction it runs in by
+    default, leaving one that already has a direction as it is. */
+function startRepeat(box: Box): void {
+  if(repeats(box) && box.repeatDirection === null) {
+    box.repeatDirection = DEFAULT_REPEAT_DIRECTION;
   }
 }

@@ -173,7 +173,7 @@ export class Application extends React.Component<{}, State> {
 
   private static release(target: EventTarget): void {
     const active = document.activeElement;
-    if(!Application.isTyping() || !(active instanceof HTMLElement)) {
+    if(!Application.holdsFocus() || !(active instanceof HTMLElement)) {
       return;
     }
     if(target instanceof Element &&
@@ -185,6 +185,9 @@ export class Application extends React.Component<{}, State> {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if(event.defaultPrevented || Application.isTyping()) {
+      return;
+    }
+    if(Application.isArrow(event.key) && Application.isChoosing()) {
       return;
     }
     const amount = (() => {
@@ -314,13 +317,27 @@ export class Application extends React.Component<{}, State> {
       key === 'ArrowLeft' || key === 'ArrowRight';
   }
 
-  private static isTyping(): boolean {
+  /** Returns whether a field has the keyboard's focus. */
+  private static holdsFocus(): boolean {
     const active = document.activeElement;
     if(active === null) {
       return false;
     }
     return active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' ||
       active.tagName === 'SELECT';
+  }
+
+  /** Returns whether a radio button has the keyboard's focus, which takes the
+      arrow keys to move among its group. */
+  private static isChoosing(): boolean {
+    const active = document.activeElement;
+    return active instanceof HTMLInputElement && active.type === 'radio';
+  }
+
+  /** Returns whether the keys pressed are going into a field for typing in,
+      which is any field but a radio button. */
+  private static isTyping(): boolean {
+    return Application.holdsFocus() && !Application.isChoosing();
   }
 
   private renderToolbar(): JSX.Element {
