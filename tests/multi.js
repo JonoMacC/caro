@@ -160,18 +160,23 @@ async function main() {
     [true, false, false]);
   await tap(await at('<B>'), SHIFT);
 
-  // Resize the pair from the bottom: only the bottom-most box grows.
+  // Resize the pair from the bottom: the bounding box is dragged,
+  // and each box is scaled within it, keeping its place.
   drawn = await boxes();
   const before = drawn.map(box => box.height);
+  const tops = drawn.map(box => box.top);
   const pair = drawn.filter(box => box.selected);
   const bottom = Math.max(...pair.map(box => box.top + box.height));
   await drag({x: pair[0].left + pair[0].width / 2, y: bottom - 1},
     {x: pair[0].left + pair[0].width / 2, y: bottom - 1 + 30});
   drawn = await boxes();
   // Dragged 5 short of 30, but that edge lands within reach of C's own
-  // center, so it's pulled the last 5 pixels onto it.
-  check('resizing the group from the bottom grows only its lowest box',
-    drawn.map(box => box.height - before[drawn.indexOf(box)]), [0, 35, 0]);
+  // center, so it's pulled the last 5 pixels onto it: the pair, 110 tall,
+  // is stretched to 145.
+  check('resizing the group from the bottom scales every box in it',
+    drawn.map(box => box.height - before[drawn.indexOf(box)]), [16, 16, 0]);
+  check('each keeping its place within the group, so the lower one moves',
+    drawn.map(box => box.top - tops[drawn.indexOf(box)]), [0, 19, 0]);
 
   // Resize from the right: both boxes are right-most, so both widen.
   drawn = await boxes();
