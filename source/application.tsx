@@ -506,11 +506,18 @@ export class Application extends React.Component<{}, State> {
     const layouts = component.layouts;
     const index = layouts.indexOf(layout);
     const target = index + offset;
-    if(index <= 0 || target <= 0 || target >= layouts.length) {
+    if(index <= 0 || target < 0 || target >= layouts.length) {
       return;
     }
+    const condition = layout.condition;
     layouts.splice(index, 1);
     layouts.splice(target, 0, layout);
+    if(target === 0) {
+      layouts[1].condition = condition;
+      layouts[0].condition = '';
+      this.commit({status: 'Promoted a scenario to the default.'}, null);
+      return;
+    }
     this.commit({status: 'Moved a scenario.'}, null);
   }
 
