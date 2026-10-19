@@ -256,7 +256,6 @@ export class ScenarioBoard extends React.Component<Properties> {
       <div style={ScenarioBoard.STYLE.controls}>
         {copy}
         <button style={ScenarioBoard.STYLE.control} title='Move left'
-            disabled={index <= 1}
             onClick={() => this.props.onMove?.(layout, -1)}>
           {'\u2039'}
         </button>

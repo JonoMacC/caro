@@ -79,8 +79,9 @@ async function main() {
     const r = box.getBoundingClientRect();
     const fields = Array.from(
       document.querySelectorAll('input[type="number"]')).map(i => i.value);
-    const chosen = Array.from(document.querySelectorAll('button'))
-      .filter(b => b.style.fontWeight === '700').map(b => b.textContent.trim());
+    const chosen = Array.from(
+      document.querySelectorAll('input[type="radio"]:checked'))
+      .map(i => i.closest('label').textContent.trim());
     return {left: Math.round(r.left), top: Math.round(r.top),
       width: Math.round(r.width), height: Math.round(r.height),
       model: fields, policy: chosen, flex: box.style.flex};

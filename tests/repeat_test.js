@@ -33,6 +33,8 @@ setWidthPolicy(whole, SizePolicy.REPEAT);
 check('repeating one axis repeats the box', sizing(whole),
   [SizePolicy.REPEAT, SizePolicy.REPEAT]);
 check('and every direction is open to it', directionsFor(whole), EVERY);
+check('a box that starts repeating runs left until told otherwise',
+  whole.repeatDirection, RepeatDirection.LEFT);
 
 whole.repeatDirection = RepeatDirection.DOWN;
 setHeightPolicy(whole, SizePolicy.FILL);
@@ -50,6 +52,12 @@ down.repeatDirection = RepeatDirection.DOWN;
 setWidthPolicy(down, SizePolicy.REPEAT);
 check('repeating a box that already repeats leaves its direction alone',
   down.repeatDirection, RepeatDirection.DOWN);
+
+const up = box(SizePolicy.FIXED, SizePolicy.FIXED);
+up.repeatDirection = RepeatDirection.UP;
+setHeightPolicy(up, SizePolicy.REPEAT);
+check('and a box that repeats keeps a direction it was given',
+  up.repeatDirection, RepeatDirection.UP);
 
 // The drawings themselves say nothing about direction, so a box read from
 // one repeats without a direction until it is given one.
